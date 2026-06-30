@@ -3,5 +3,30 @@
   "lastUpdated": "2026-06-30",
   "_doc": "Pre-registered event library. Every event MUST carry a written `rationale` (the economic mechanism) before admission — the engine refuses to run an event without one, the antidote to fishing. Each event names a `target` and, for breadth events, a `breadthUniverse` from universes.json. Email-derived candidates live in private/ until signed off; only mechanical definitions, my own rationale, and OUR computed numbers ever appear here or on the public dashboard.",
   "defaultUniverse": "core",
-  "events": []
+  "events": [
+    {
+      "id": "gld-oversold-reversion-downtrend",
+      "name": "GLD oversold washout below its 200-day SMA",
+      "kind": "oversold_reversion_in_downtrend",
+      "target": "GLD",
+      "rsiPeriod": 14,
+      "oversoldLevel": 30,
+      "smaPeriod": 200,
+      "clusterDays": 21,
+      "rationale": "A mean-reversion proxy, NOT a replication of the SentimenTrader GLD study (which rests on a proprietary Optix sentiment index and a 21-year seasonal window we cannot reproduce). Mechanism: a liquid, widely-held commodity ETF that becomes acutely oversold (RSI below 30) while already trading below its 200-day SMA has usually overshot on momentum or forced selling, so a partial snap-back toward the mean is common over the following weeks. Deliberately a COUNTER-TREND test, logged as such, not a trend signal. Forward returns on GLD; significance from our random-entry Monte Carlo; thin-sample caveat applies.",
+      "definition": "Trigger on the session GLD's RSI(14) crosses below 30 while GLD closes below its 200-day SMA. Forward returns measured on GLD from the trigger close."
+    },
+    {
+      "id": "slv-oversold-reversion-downtrend",
+      "name": "SLV oversold washout below its 200-day SMA",
+      "kind": "oversold_reversion_in_downtrend",
+      "target": "SLV",
+      "rsiPeriod": 14,
+      "oversoldLevel": 30,
+      "smaPeriod": 200,
+      "clusterDays": 21,
+      "rationale": "The same oversold-in-downtrend mean-reversion construct as the GLD card, applied to silver to test whether the washout-bounce holds across precious metals. Silver (SLV) is higher-beta and more volatile than gold, so washouts run deeper and snap-backs are larger but noisier; the natural robustness check on the gold result. Counter-trend by design. Forward returns on SLV; significance from our random-entry Monte Carlo; thin-sample caveat applies.",
+      "definition": "Trigger on the session SLV's RSI(14) crosses below 30 while SLV closes below its 200-day SMA. Forward returns measured on SLV from the trigger close."
+    }
+  ]
 }
