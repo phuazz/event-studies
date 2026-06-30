@@ -117,6 +117,20 @@ function rollingMax(vals, win) {
   return out;
 }
 
+// Trailing rolling minimum over `win` bars inclusive; out[i] uses vals[i-win+1..i].
+function rollingMin(vals, win) {
+  const out = new Array(vals.length).fill(null);
+  for (let i = win - 1; i < vals.length; i++) {
+    let m = Infinity, ok = true;
+    for (let k = i - win + 1; k <= i; k++) {
+      if (vals[k] == null) { ok = false; break; }
+      if (vals[k] < m) m = vals[k];
+    }
+    out[i] = ok ? m : null;
+  }
+  return out;
+}
+
 // ---------- data loading ----------
 
 function loadTicker(tk) {
@@ -298,6 +312,37 @@ function detectOversoldReversionInDowntrend(target, ev) {
   return { dates, ac, triggers, indicator: rsi, indicatorName: `RSI(${ev.rsiPeriod || 14})` };
 }
 
+// Momentum thrust out of a multi-month low (the SentimenTrader coffee study,
+// now testable on a single-commodity instrument): a `rocWindow`-day rate of
+// change above `thrustPct` while the instrument also printed a `lowLookback`-day
+// low within the trailing `lowWithin` sessions. Their thesis is a bull trap, so
+// the interesting forward returns are the 2-6 month negatives — our Monte Carlo
+// judges it, not their printed numbers.
+function detectMomentumThrustFrom252dLow(target, ev) {
+  const ac = target.daily.map(b => b.ac);
+  const dates = target.daily.map(b => b.d);
+  const rocWin = ev.rocWindow || 5;
+  const thr = (ev.thrustPct != null ? ev.thrustPct : 13) / 100;
+  const lowLook = ev.lowLookback || 252;
+  const lowWithin = ev.lowWithin || 21;
+
+  const roc = ac.map((v, i) => i >= rocWin ? (v / ac[i - rocWin] - 1) : null);
+  const trailMin = rollingMin(ac, lowLook);
+  const is252Low = ac.map((v, i) => trailMin[i] == null ? null : (v <= trailMin[i] + 1e-9));
+  const lowRecent = new Array(ac.length).fill(false);
+  for (let i = 0; i < ac.length; i++) {
+    for (let k = Math.max(0, i - lowWithin + 1); k <= i; k++) {
+      if (is252Low[k]) { lowRecent[i] = true; break; }
+    }
+  }
+  const triggers = [];
+  for (let i = 1; i < ac.length; i++) {
+    if (roc[i] == null || roc[i - 1] == null) continue;
+    if (roc[i] > thr && roc[i - 1] <= thr && lowRecent[i]) triggers.push(i);
+  }
+  return { dates, ac, triggers, indicator: roc.map(r => r == null ? null : +(r * 100).toFixed(1)), indicatorName: `${rocWin}d RoC %` };
+}
+
 // Collapse triggers whose forward windows overlap into one episode. We keep the
 // FIRST trigger of each cluster; any later trigger within `clusterDays` bars of
 // the cluster's anchor is absorbed.
@@ -458,6 +503,8 @@ function main() {
       series = detectNewHighBreadthDivergence(loadTicker(ev.target), ev, universe);
     } else if (ev.kind === 'oversold_reversion_in_downtrend') {
       series = detectOversoldReversionInDowntrend(loadTicker(ev.target), ev);
+    } else if (ev.kind === 'momentum_thrust_from_252d_low') {
+      series = detectMomentumThrustFrom252dLow(loadTicker(ev.target), ev);
     } else {
       console.warn(`SKIP ${ev.id}: unknown kind ${ev.kind}`); continue;
     }

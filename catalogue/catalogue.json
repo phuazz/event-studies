@@ -27,6 +27,19 @@
       "clusterDays": 21,
       "rationale": "The same oversold-in-downtrend mean-reversion construct as the GLD card, applied to silver to test whether the washout-bounce holds across precious metals. Silver (SLV) is higher-beta and more volatile than gold, so washouts run deeper and snap-backs are larger but noisier; the natural robustness check on the gold result. Counter-trend by design. Forward returns on SLV; significance from our random-entry Monte Carlo; thin-sample caveat applies.",
       "definition": "Trigger on the session SLV's RSI(14) crosses below 30 while SLV closes below its 200-day SMA. Forward returns measured on SLV from the trigger close."
+    },
+    {
+      "id": "jo-coffee-thrust-from-252d-low",
+      "name": "Coffee (JO) momentum thrust out of a 252-day low",
+      "kind": "momentum_thrust_from_252d_low",
+      "target": "JO",
+      "rocWindow": 5,
+      "thrustPct": 13,
+      "lowLookback": 252,
+      "lowWithin": 21,
+      "clusterDays": 21,
+      "rationale": "Re-test of the SentimenTrader coffee study, now possible because JO (a coffee ETN) sits in its own single_cmdty universe — the instrument the scanner's 56-ETF book never carried, which is why this was previously shelved as not-testable. Mechanism: a violent 5-day momentum thrust (>13%) out of a 12-month low is typically a supply-shock relief spike in a structurally mean-reverting commodity; such thrusts have historically faded (a bull trap) rather than initiated durable uptrends. JO is an ETN proxy for front-month Arabica, not the futures the study used, so basis/roll differences apply — flagged, and judged on OUR Monte Carlo, not their printed win rates. This proves the multi-universe pipeline end-to-end.",
+      "definition": "Trigger on the session JO's 5-day rate-of-change first exceeds +13% while JO has also printed a 252-day low within the trailing 21 sessions. Forward returns measured on JO from the trigger close (their thesis expects negative 2-6 month returns)."
     }
   ]
 }
