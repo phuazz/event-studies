@@ -1,0 +1,44 @@
+name: Refresh event studies
+
+# Fetches fresh daily history (data/ is gitignored, so CI always fetches clean),
+# recomputes the event engine, and commits events_results.json when it changes.
+# The dashboard runtime-fetches that file, so a commit is all that is needed.
+
+on:
+  schedule:
+    - cron: '0 23 * * 1-5'   # weekdays 23:00 UTC, after the US cash close
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch daily history (gitignored data/)
+        run: node scripts/fetch_history.js --max-age-hours=1
+
+      - name: Recompute event results
+        run: node engine/events.js
+
+      - name: Commit updated results if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- events_results.json; then
+            echo "No change in events_results.json"
+          else
+            git add events_results.json
+            git commit -m "Daily event refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi
