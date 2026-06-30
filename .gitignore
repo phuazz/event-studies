@@ -1,0 +1,18 @@
+# ---------------------------------------------------------------------------
+# PRIVATE RESEARCH STORE — email-derived content (SentimenTrader, The Market
+# Ear, SemiAnalysis). PAID, LICENSED THIRD-PARTY IP. This repo is PUBLIC
+# (GitHub Pages). NOTHING under private/ may EVER be committed.
+# Verify: git check-ignore -v private/
+private/
+# ---------------------------------------------------------------------------
+
+# Daily price history — regenerable via scripts/fetch_history.js; do not commit.
+data/
+
+# Node / OS
+node_modules/
+.DS_Store
+*.log
+
+# Claude Code worktree + per-session preview launch configs
+.claude/

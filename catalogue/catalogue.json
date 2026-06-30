@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-06-30",
+  "_doc": "Pre-registered event library. Every event MUST carry a written `rationale` (the economic mechanism) before admission — the engine refuses to run an event without one, the antidote to fishing. Each event names a `target` and, for breadth events, a `breadthUniverse` from universes.json. Email-derived candidates live in private/ until signed off; only mechanical definitions, my own rationale, and OUR computed numbers ever appear here or on the public dashboard.",
+  "defaultUniverse": "core",
+  "events": []
+}

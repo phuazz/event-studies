@@ -1,0 +1,24 @@
+{
+  "_doc": "Config-driven instrument universes for the event engine. Each catalogue event names the universe(s) it needs. scripts/fetch_history.js fetches the union of tickers referenced by the active catalogue plus any universe listed here. Add instruments as events require them — start focused, grow deliberately.",
+  "version": 1,
+  "lastUpdated": "2026-06-30",
+  "universes": {
+    "core": {
+      "_doc": "Initial focused cross-asset set. Liquid ETFs, all daily-available via Yahoo v8. The bootstrap universe; grow as events require.",
+      "tickers": [
+        { "t": "SPY", "n": "S&P 500", "cls": "US Equity" },
+        { "t": "EEM", "n": "Emerging Markets", "cls": "EM Equity" },
+        { "t": "TLT", "n": "US 20Y+ Treasury", "cls": "Fixed Income" },
+        { "t": "GLD", "n": "Gold", "cls": "Commodity" },
+        { "t": "SLV", "n": "Silver", "cls": "Commodity" }
+      ]
+    }
+  },
+  "planned": {
+    "_doc": "Not yet wired — added when an event needs them.",
+    "japan_sectors": "TOPIX-17 Tokyo-listed sector ETFs 1617.T..1633.T (Japan internal-breadth; scope in private/)",
+    "single_cmdty": "Single-commodity ETNs/ETFs, e.g. JO (coffee)",
+    "single_names": "Individual equities as needed",
+    "futures": "DATA-GATED — continuous futures require a Norgate feed; Yahoo unreliable. Do not fake."
+  }
+}
