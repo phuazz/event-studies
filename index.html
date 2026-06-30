@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Studies</title>
+<style>
+:root{
+  --bg:#FAFAF8; --sf:#FFF; --sa:#F4F3EF; --bd:#E2E0DA; --bl:#EEECE7;
+  --t1:#1A1A18; --t2:#45433E; --t3:#6B6863;
+  --ac:#2563EB; --gn:#15803D; --gnb:#ECFDF3; --rd:#DC2626; --rdb:#FEF2F2; --am:#B45309;
+  --r:12px; --rs:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;
+  background:var(--bg);color:var(--t1);line-height:1.55;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 28px 80px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:22px;
+  border-bottom:1px solid var(--bd);padding-bottom:18px}
+.hdr h1{font-size:26px;font-weight:700;letter-spacing:-.4px}
+.hdr .sub{font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+.hdr .meta{font-size:13px;color:var(--t2);text-align:right}
+.note{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px 20px;font-size:14px;
+  color:var(--t2);margin-bottom:20px}
+.note strong{color:var(--t1)}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.pill{padding:9px 15px;font-size:14px;font-weight:500;border:1px solid var(--bd);border-radius:22px;
+  background:var(--sf);color:var(--t2);cursor:pointer;transition:all .12s}
+.pill:hover{border-color:var(--t3);color:var(--t1)}
+.pill.on{background:var(--t1);color:#fff;border-color:var(--t1)}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:22px 24px;margin-bottom:20px}
+.card h2{font-size:20px;font-weight:700;margin-bottom:10px}
+.kv{font-size:14px;color:var(--t2);margin:6px 0;line-height:1.6}
+.kv b{color:var(--t1);font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.tag{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--sa);color:var(--t2)}
+.tag.warn{background:#FFFBEB;color:var(--am);border:1px solid #FDE68A}
+.sec-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);
+  margin:24px 0 12px}
+/* chart */
+.chart{display:flex;align-items:flex-end;gap:18px;height:230px;padding:10px 4px 0;border-bottom:1px solid var(--bd);margin-bottom:6px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative}
+.bars{display:flex;align-items:flex-end;gap:5px;height:100%;width:100%;justify-content:center}
+.bar{width:26px;border-radius:3px 3px 0 0;position:relative}
+.bar.cond{background:var(--ac)}
+.bar.cond.neg{background:var(--rd)}
+.bar.base{background:transparent;border:1.5px solid var(--t3)}
+.bar .val{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;
+  white-space:nowrap;color:var(--t2)}
+.xlab{font-size:12px;color:var(--t3);margin-top:8px;font-weight:600}
+.legend{display:flex;gap:18px;font-size:12px;color:var(--t3);margin:10px 0 4px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:13px;height:13px;border-radius:3px;display:inline-block}
+.sw.cond{background:var(--ac)}.sw.base{border:1.5px solid var(--t3)}
+/* table */
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+th{text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  color:var(--t3);border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--bl);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.pos{color:var(--gn);font-weight:600}td.neg{color:var(--rd);font-weight:600}
+tr:hover td{background:var(--sa)}
+.sig{font-weight:700}
+.dim{color:var(--t3)}
+.err{background:var(--rdb);border:1px solid #FECACA;color:var(--rd);padding:16px 20px;border-radius:var(--r)}
+.foot{font-size:12px;color:var(--t3);margin-top:24px;text-align:center}
+@media(max-width:640px){.chart{gap:8px}.bar{width:18px}.bar.base{width:18px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div>
+      <h1>Event Studies</h1>
+      <div class="sub">Pre-registered forward-return analysis</div>
+    </div>
+    <div class="meta" id="meta"></div>
+  </div>
+  <div id="root"><div class="kv">Loading…</div></div>
+  <div class="foot">Private research-intake feeds this engine; licensed source content is never published. Numbers are our own, computed on our data.</div>
+</div>
+
+<script>
+const HZ_FALLBACK=['1W','2W','1M','2M','3M','6M','1Y'];
+const pctf=(v,d=2)=> (v==null||Number.isNaN(v))?'—':(v*100).toFixed(d);
+const sgn=v=> v>0?'pos':(v<0?'neg':'');
+
+function chart(ev){
+  // grouped bars: conditional median (solid) vs baseline median (outline), per horizon
+  const rows=ev.byHorizon;
+  const vals=rows.flatMap(r=>[r.median,r.baseMedian]).filter(v=>v!=null&&!Number.isNaN(v));
+  const maxAbs=Math.max(0.01,...vals.map(Math.abs));
+  const H=190; // px usable height each side of zero -> we use single-direction scaling from a mid baseline
+  const cols=rows.map(r=>{
+    const cv=r.median==null?0:r.median, bv=r.baseMedian==null?0:r.baseMedian;
+    const ch=Math.abs(cv)/maxAbs*H, bh=Math.abs(bv)/maxAbs*H;
+    return `<div class="col"><div class="bars">
+      <div class="bar cond ${cv<0?'neg':''}" style="height:${ch||1}px"><span class="val">${pctf(cv,1)}%</span></div>
+      <div class="bar base" style="height:${bh||1}px"></div>
+    </div><div class="xlab">${r.label}</div></div>`;
+  }).join('');
+  return `<div class="legend">
+      <span><i class="sw cond"></i> Conditional median</span>
+      <span><i class="sw base"></i> Unconditional baseline</span>
+    </div><div class="chart">${cols}</div>`;
+}
+
+function statsTable(ev){
+  const head=`<tr><th>Horizon</th><th>n</th><th>Cond med</th><th>Base med</th><th>Edge</th><th>Hit</th><th>MAE med</th><th>MFE med</th><th>p-value</th><th>Pctile</th></tr>`;
+  const rows=ev.byHorizon.map(r=>{
+    const sig = (r.pValue!=null && r.pValue<0.10);
+    return `<tr>
+      <td><b>${r.label}</b></td>
+      <td class="dim">${r.n}</td>
+      <td class="${sgn(r.median)}">${pctf(r.median,1)}%</td>
+      <td class="dim">${pctf(r.baseMedian,1)}%</td>
+      <td class="${sgn(r.edgeMedian)}">${pctf(r.edgeMedian,1)}%</td>
+      <td>${r.hit==null||Number.isNaN(r.hit)?'—':(r.hit*100).toFixed(0)+'%'}</td>
+      <td class="neg">${pctf(r.maeMedian,1)}%</td>
+      <td class="pos">${pctf(r.mfeMedian,1)}%</td>
+      <td class="${sig?'sig':''}">${r.pValue==null||Number.isNaN(r.pValue)?'—':r.pValue.toFixed(2)}</td>
+      <td class="dim">${r.percentile==null||Number.isNaN(r.percentile)?'—':(r.percentile*100).toFixed(0)+'%'}</td>
+    </tr>`;
+  }).join('');
+  return `<table>${head}${rows}</table>`;
+}
+
+function epTable(ev){
+  const hz=ev.byHorizon.map(r=>r.label);
+  const keys=ev.byHorizon.map(r=>r.h);
+  const head=`<tr><th>Episode</th><th>Regime</th>${hz.map(l=>`<th>${l}</th>`).join('')}</tr>`;
+  const rows=ev.episodes.map(e=>{
+    const cells=keys.map(k=>{const v=e.fwd[k];return `<td class="${v==null?'dim':sgn(v)}">${v==null?'—':v.toFixed(1)+'%'}</td>`}).join('');
+    return `<tr><td><b>${e.date}</b></td><td class="dim">${e.regime||'—'}</td>${cells}</tr>`;
+  }).join('');
+  return `<table>${head}${rows}</table>`;
+}
+
+function renderEvent(ev,data){
+  return `<div class="card">
+    <h2>${ev.name}</h2>
+    <div class="kv"><b>Definition.</b> ${ev.definition||''}</div>
+    <div class="kv"><b>Rationale.</b> ${ev.rationale||''}</div>
+    <div class="kv dim">Target: ${ev.target} · forward return from the trigger-day close (event-study convention).</div>
+    <div class="tags">
+      <span class="tag"><b>${ev.nEpisodes}</b> episodes</span>
+      <span class="tag">${ev.nTriggers} triggers</span>
+      <span class="tag">regime on/off ${ev.regimeSplit.on}/${ev.regimeSplit.off}</span>
+      <span class="tag">${ev.firstDate} → ${ev.lastDate}</span>
+      ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
+    </div>
+    <div class="sec-lbl">Forward returns — conditional vs baseline</div>
+    ${chart(ev)}
+    <div class="sec-lbl">Per-horizon statistics</div>
+    ${statsTable(ev)}
+    <div class="sec-lbl">Episodes</div>
+    ${epTable(ev)}
+  </div>
+  <div class="note" style="margin-top:18px">${data.multipleTestingNote||''}</div>`;
+}
+
+let DATA=null, current=0;
+function paint(){
+  const root=document.getElementById('root');
+  if(!DATA||!DATA.events.length){root.innerHTML='<div class="err">No events in results.</div>';return;}
+  const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${e.name} (${e.nEpisodes})</div>`).join('');
+  root.innerHTML=`<div class="pills">${pills}</div>`+renderEvent(DATA.events[current],DATA);
+  root.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
+}
+
+async function boot(){
+  try{
+    const r=await fetch('events_results.json?v='+Date.now());
+    if(!r.ok) throw new Error('events_results.json HTTP '+r.status);
+    DATA=await r.json();
+    const w=DATA.dailyWindow||{};
+    document.getElementById('meta').innerHTML=
+      `Generated ${(DATA.generatedAt||'').slice(0,10)}<br>Daily window ${w.start||'?'} → ${w.end||'?'}<br>${DATA.events.length} event(s) × ${(DATA.horizonLabels||HZ_FALLBACK).length} horizons`;
+    paint();
+  }catch(e){
+    document.getElementById('root').innerHTML='<div class="err">Could not load events_results.json — run <code>node engine/events.js</code> first. ('+e.message+')</div>';
+  }
+}
+boot();
+</script>
+</body>
+</html>
