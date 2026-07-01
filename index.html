@@ -52,6 +52,13 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:13px;height:13px;border-radius:3px;display:inline-block}
 .sw.cond{background:var(--ac)}.sw.base{border:1.5px solid var(--t3)}
+/* fan */
+.fan-wrap{position:relative}
+#fanSvg{cursor:crosshair}
+.fan-tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--bd);border-radius:8px;
+  padding:8px 11px;font-size:12px;line-height:1.55;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:5;
+  min-width:158px;color:var(--t1)}
+.fan-tip b{font-weight:700}
 /* table */
 table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
 th{text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
@@ -107,12 +114,18 @@ function buildFan(ev){
   return fan;
 }
 
+let FAN=null;
 function fanChart(ev){
   const fan=buildFan(ev);
-  if(fan.length<4) return `<div class="kv dim">Range-of-outcomes fan needs ≥3 episodes with a forward window — not enough here (n=${ev.nEpisodes}).</div>`;
+  if(fan.length<4){FAN=null;return `<div class="kv dim">Range-of-outcomes fan needs ≥3 episodes with a forward window — not enough here (n=${ev.nEpisodes}).</div>`;}
   const W=700,H=300,mL=46,mR=16,mT=14,mB=26,pw=W-mL-mR,ph=H-mT-mB;
   const K=fan[fan.length-1].k;
+  // Latest instance realized path (the most recent trigger — e.g. the live one).
+  const ps=ev.priceSeries||[], lastEp=ev.episodes[ev.episodes.length-1];
+  const latest={date:lastEp?lastEp.date:'',path:[]};
+  if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
   let yMin=0,yMax=0; for(const f of fan){yMin=Math.min(yMin,f.p10,f.ddBad);yMax=Math.max(yMax,f.p90,f.mx);}
+  for(const p of latest.path){yMin=Math.min(yMin,p.v);yMax=Math.max(yMax,p.v);}
   yMin*=1.08;yMax*=1.08; if(yMax<=yMin)yMax=yMin+0.01;
   const sx=k=>mL+k/K*pw, sy=v=>mT+(yMax-v)/(yMax-yMin)*ph;
   const line=key=>fan.map(f=>`${sx(f.k).toFixed(1)},${sy(f[key]).toFixed(1)}`).join(' ');
@@ -125,7 +138,11 @@ function fanChart(ev){
   for(let i=0;i<=ticks;i++){const v=yMin+(yMax-yMin)*i/ticks;const y=sy(v).toFixed(1);
     gl+=`<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="#EEECE7"/><text x="${mL-6}" y="${(+y+3).toFixed(1)}" text-anchor="end" font-size="11" fill="#6B6863">${(v*100).toFixed(0)}%</text>`;}
   const zeroY=sy(0).toFixed(1);
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block">
+  const latestLine = latest.path.length>=2 ?
+    `<polyline points="${latest.path.map(p=>`${sx(p.k).toFixed(1)},${sy(p.v).toFixed(1)}`).join(' ')}" fill="none" stroke="#2563EB" stroke-width="2.5"/>`
+    +`<circle cx="${sx(latest.path[latest.path.length-1].k).toFixed(1)}" cy="${sy(latest.path[latest.path.length-1].v).toFixed(1)}" r="3.8" fill="#2563EB"/>` : '';
+  FAN={fan,latest,geom:{mL,pw,K,W,H,mT,ph,yMin,yMax}};
+  return `<div class="fan-wrap"><svg id="fanSvg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block">
     <defs><linearGradient id="fanG" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#DC2626"/><stop offset="0.5" stop-color="#EA580C"/><stop offset="1" stop-color="#F59E0B"/></linearGradient></defs>
     ${gl}
@@ -134,8 +151,43 @@ function fanChart(ev){
     <line x1="${mL}" y1="${zeroY}" x2="${W-mR}" y2="${zeroY}" stroke="#9E9A92" stroke-dasharray="3 3"/>
     <polyline points="${line('p50')}" fill="none" stroke="#1A1A18" stroke-width="2"/>
     <polyline points="${line('ddBad')}" fill="none" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="5 3"/>
+    ${latestLine}
     ${markers}
-  </svg>`;
+    <line id="fanGuide" x1="0" y1="${mT}" x2="0" y2="${mT+ph}" stroke="#1A1A18" stroke-width="1" stroke-dasharray="2 2" style="visibility:hidden"/>
+    <circle id="fanDot" r="3.8" fill="none" stroke="#1A1A18" stroke-width="1.5" style="visibility:hidden"/>
+  </svg><div id="fanTip" class="fan-tip" style="display:none"></div></div>`;
+}
+
+function wireFan(){
+  if(!FAN) return;
+  const wrap=document.querySelector('.fan-wrap'); if(!wrap) return;
+  const svg=wrap.querySelector('#fanSvg'), guide=wrap.querySelector('#fanGuide'), dot=wrap.querySelector('#fanDot'), tip=wrap.querySelector('#fanTip');
+  const {mL,pw,K,W,mT,ph,yMin,yMax}=FAN.geom;
+  const sx=k=>mL+k/K*pw, sy=v=>mT+(yMax-v)/(yMax-yMin)*ph;
+  const P=v=>(v>=0?'+':'')+(v*100).toFixed(1)+'%';
+  const latestAt=k=>{const p=FAN.latest.path.find(x=>x.k===k);return p?p.v:null;};
+  svg.addEventListener('mousemove',e=>{
+    const rect=svg.getBoundingClientRect();
+    const xs=(e.clientX-rect.left)/rect.width*W;
+    let k=Math.round((xs-mL)/pw*K); k=Math.max(0,Math.min(K,k));
+    const f=FAN.fan[k]; if(!f) return;
+    const gx=sx(k).toFixed(1);
+    guide.setAttribute('x1',gx);guide.setAttribute('x2',gx);guide.style.visibility='visible';
+    dot.setAttribute('cx',gx);dot.setAttribute('cy',sy(f.p50).toFixed(1));dot.style.visibility='visible';
+    const mo=k/21, hz=k===0?'entry':(mo<1?k+'d':mo.toFixed(1)+'mo');
+    const lv=latestAt(k);
+    tip.innerHTML=`<b>Day ${k}</b> · ${hz} · n=${f.n}`
+      +`<div>Median <b>${P(f.p50)}</b></div>`
+      +`<div class="dim">25–75%: ${P(f.p25)} … ${P(f.p75)}</div>`
+      +`<div class="dim">10–90%: ${P(f.p10)} … ${P(f.p90)}</div>`
+      +`<div style="color:var(--rd)">Worst DD: ${P(f.ddBad)}</div>`
+      +(lv!=null?`<div style="color:var(--ac)">Latest (${FAN.latest.date}): <b>${P(lv)}</b></div>`:'');
+    tip.style.display='block';
+    const wr=wrap.getBoundingClientRect();
+    let tx=e.clientX-wr.left+14; if(tx+180>wr.width)tx=e.clientX-wr.left-192;
+    tip.style.left=Math.max(0,tx)+'px'; tip.style.top=(e.clientY-wr.top+12)+'px';
+  });
+  svg.addEventListener('mouseleave',()=>{guide.style.visibility='hidden';dot.style.visibility='hidden';tip.style.display='none';});
 }
 
 function chart(ev){
@@ -206,7 +258,7 @@ function renderEvent(ev,data){
     ${chart(ev)}
     <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
     ${fanChart(ev)}
-    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. Bands narrow at long horizons as fewer episodes have a full forward window.</div>
+    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.</div>
     <div class="sec-lbl">Per-horizon statistics</div>
     ${statsTable(ev)}
     <div class="sec-lbl">Episodes</div>
@@ -222,6 +274,7 @@ function paint(){
   const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${e.name} (${e.nEpisodes})</div>`).join('');
   root.innerHTML=`<div class="pills">${pills}</div>`+renderEvent(DATA.events[current],DATA);
   root.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
+  wireFan();
 }
 
 async function boot(){
