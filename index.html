@@ -118,15 +118,17 @@ let FAN=null;
 function fanChart(ev){
   const fan=buildFan(ev);
   if(fan.length<4){FAN=null;return `<div class="kv dim">Range-of-outcomes fan needs ≥3 episodes with a forward window — not enough here (n=${ev.nEpisodes}).</div>`;}
-  const W=700,H=300,mL=46,mR=16,mT=14,mB=26,pw=W-mL-mR,ph=H-mT-mB;
+  const W=720,H=280,mL=46,mR=14,mT=14,mB=26,pw=W-mL-mR,ph=H-mT-mB;
   const K=fan[fan.length-1].k;
   // Latest instance realized path (the most recent trigger — e.g. the live one).
   const ps=ev.priceSeries||[], lastEp=ev.episodes[ev.episodes.length-1];
   const latest={date:lastEp?lastEp.date:'',path:[]};
   if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
-  let yMin=0,yMax=0; for(const f of fan){yMin=Math.min(yMin,f.p10,f.ddBad);yMax=Math.max(yMax,f.p90,f.mx);}
+  // Scale to what is actually DRAWN — p10/p90 bands, the drawdown line, and the
+  // latest path — not the raw min/max episode (which would leave dead space).
+  let yMin=0,yMax=0; for(const f of fan){yMin=Math.min(yMin,f.p10,f.ddBad);yMax=Math.max(yMax,f.p90);}
   for(const p of latest.path){yMin=Math.min(yMin,p.v);yMax=Math.max(yMax,p.v);}
-  yMin*=1.08;yMax*=1.08; if(yMax<=yMin)yMax=yMin+0.01;
+  yMin*=1.06;yMax*=1.06; if(yMax<=yMin)yMax=yMin+0.01;
   const sx=k=>mL+k/K*pw, sy=v=>mT+(yMax-v)/(yMax-yMin)*ph;
   const line=key=>fan.map(f=>`${sx(f.k).toFixed(1)},${sy(f[key]).toFixed(1)}`).join(' ');
   const band=(hi,lo)=>fan.map(f=>`${sx(f.k).toFixed(1)},${sy(f[hi]).toFixed(1)}`)
@@ -142,7 +144,7 @@ function fanChart(ev){
     `<polyline points="${latest.path.map(p=>`${sx(p.k).toFixed(1)},${sy(p.v).toFixed(1)}`).join(' ')}" fill="none" stroke="#2563EB" stroke-width="2.5"/>`
     +`<circle cx="${sx(latest.path[latest.path.length-1].k).toFixed(1)}" cy="${sy(latest.path[latest.path.length-1].v).toFixed(1)}" r="3.8" fill="#2563EB"/>` : '';
   FAN={fan,latest,geom:{mL,pw,K,W,H,mT,ph,yMin,yMax}};
-  return `<div class="fan-wrap"><svg id="fanSvg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block">
+  return `<div class="fan-wrap"><svg id="fanSvg" viewBox="0 0 ${W} ${H}" width="100%" style="width:100%;height:auto;display:block">
     <defs><linearGradient id="fanG" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#DC2626"/><stop offset="0.5" stop-color="#EA580C"/><stop offset="1" stop-color="#F59E0B"/></linearGradient></defs>
     ${gl}
