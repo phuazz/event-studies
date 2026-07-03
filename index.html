@@ -52,6 +52,23 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:13px;height:13px;border-radius:3px;display:inline-block}
 .sw.cond{background:var(--ac)}.sw.base{border:1.5px solid var(--t3)}
+/* kpi cards + credibility gate + live panel (adapted from the Signal Tracker) */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px}
+.kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:5px}
+.kpi .v{font-size:24px;font-weight:700;line-height:1}
+.kpi .s{font-size:11.5px;color:var(--t3);margin-top:4px}
+.gate{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.3px;vertical-align:middle}
+.gate-act{background:var(--gnb);color:var(--gn);border:1px solid #A7F3D0}
+.gate-monitor{background:#FFFBEB;color:var(--am);border:1px solid #FDE68A}
+.gate-ignore{background:var(--sa);color:var(--t3);border:1px solid var(--bd)}
+.gdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.brk{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 2px;align-items:center}
+.brk .bl{font-size:11.5px;color:var(--t3);font-weight:600;margin-right:2px}
+.brk span.b{font-size:11.5px;background:var(--sa);border-radius:6px;padding:3px 8px;color:var(--t2)}
+.live{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--rs);padding:12px 15px;margin:14px 0;font-size:13px;line-height:1.65;color:var(--t1)}
+.live b{font-weight:700}
+@media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}}
 /* fan */
 .fan-wrap{position:relative}
 #fanSvg{cursor:crosshair}
@@ -243,9 +260,68 @@ function epTable(ev){
   return `<table>${head}${rows}</table>`;
 }
 
+// Credibility gate — a transparent 0-10 score (5 components x 0-2), adapted from
+// the Signal Tracker but computed entirely from OUR Monte Carlo stats. ACT
+// requires both a high total AND some statistical significance; sub-4-episode
+// events are floored to IGNORE.
+function credibility(ev){
+  const bh=ev.byHorizon||[], at=h=>bh.find(r=>r.label===h)||{};
+  const sample = ev.nEpisodes>=12?2:ev.nEpisodes>=6?1:0;
+  let bestP=1; for(const r of bh){ if(r.edgeMedian>0 && r.pValue!=null && !Number.isNaN(r.pValue) && r.pValue<bestP) bestP=r.pValue; }
+  const signif = bestP<0.05?2:bestP<0.10?1:0;
+  const m=at('3M'), mfe=m.mfeMedian, mae=m.maeMedian;
+  const tail = (mfe!=null&&mae!=null&&mae<0)?(mfe>-mae*1.3?2:mfe>-mae?1:0):(mfe>0?1:0);
+  const on=ev.regimeSplit?.on||0, off=ev.regimeSplit?.off||0;
+  const regime = Math.min(on,off)>=2?2:Math.min(on,off)>=1?1:0;
+  const pos = bh.length?bh.filter(r=>r.edgeMedian>0).length/bh.length:0;
+  const consistency = pos>=0.7?2:pos>=0.5?1:0;
+  let total=sample+signif+tail+regime+consistency;
+  let action = total>=7?'act':total>=5?'monitor':'ignore';
+  if(signif===0 && action==='act') action='monitor';
+  if(ev.nEpisodes<4) action='ignore';
+  return {total,action,bestP,breakdown:{'Sample':sample,'Significance':signif,'Tail asym':tail,'Regime':regime,'Consistency':consistency}};
+}
+function gate(c){const cls=c.action==='act'?'gate-act':c.action==='ignore'?'gate-ignore':'gate-monitor';return `<span class="gate ${cls}">${c.action.toUpperCase()} ${c.total}/10</span>`;}
+function gateDot(c){const col=c.action==='act'?'var(--gn)':c.action==='ignore'?'var(--t3)':'var(--am)';return `<span class="gdot" style="background:${col}"></span>`;}
+
+// Live actual-vs-expected: the most recent trigger, if still within the 1Y
+// forward window, marked-to-market against the expected (median) path.
+function liveStatus(ev){
+  const ps=ev.priceSeries||[], eps=ev.episodes||[]; if(!eps.length) return null;
+  const last=eps[eps.length-1]; if(last.idx==null) return null;
+  const k=ps.length-1-last.idx; if(k<=0) return null;
+  const mtm=ps[ps.length-1].ac/ps[last.idx].ac-1;
+  const fan=buildFan(ev); const f=fan.find(x=>x.k>=k)||fan[fan.length-1];
+  let lo=0,hi=0; for(let j=1;j<=k;j++){const r=ps[last.idx+j].ac/ps[last.idx].ac-1; if(r<lo)lo=r; if(r>hi)hi=r;}
+  return {date:last.date,k,mtm,expMed:f?f.p50:null,instMAE:lo,instMFE:hi,live:k<=252};
+}
+function livePanel(ev){
+  const s=liveStatus(ev); if(!s||!s.live) return '';
+  const P=v=>(v==null?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%');
+  const mo=s.k/21, inLbl=mo<1?s.k+'d':mo.toFixed(1)+'mo';
+  const rel=s.expMed==null?'':(s.mtm-s.expMed>0.005?'ahead of':(s.mtm-s.expMed<-0.005?'behind':'in line with'));
+  return `<div class="live"><b>● Live instance</b> — triggered <b>${s.date}</b> (${s.k}d ago, ~${inLbl} into the window).
+    Marked-to-market <b>${P(s.mtm)}</b> vs expected median <b>${P(s.expMed)}</b> at this point${rel?` — <b>${rel}</b> expectation`:''}.
+    This instance so far: peak <b>${P(s.instMFE)}</b>, trough <span style="color:var(--rd)"><b>${P(s.instMAE)}</b></span>.</div>`;
+}
+
+function summaryCards(){
+  const evs=DATA.events, creds=evs.map(credibility);
+  const live=evs.map(liveStatus).filter(s=>s&&s.live).length;
+  const act=creds.filter(c=>c.action==='act').length, mon=creds.filter(c=>c.action==='monitor').length, ign=creds.filter(c=>c.action==='ignore').length;
+  const totalEps=evs.reduce((a,e)=>a+(e.nEpisodes||0),0);
+  return `<div class="kpis">
+    <div class="kpi"><div class="l">Events</div><div class="v">${evs.length}</div><div class="s">${totalEps} episodes total</div></div>
+    <div class="kpi"><div class="l">Live now</div><div class="v">${live}</div><div class="s">triggered &amp; still maturing</div></div>
+    <div class="kpi"><div class="l">Act-gated</div><div class="v">${act}</div><div class="s">credibility ≥7/10 &amp; significant</div></div>
+    <div class="kpi"><div class="l">Monitor / ignore</div><div class="v">${mon} / ${ign}</div><div class="s">below act threshold</div></div>
+  </div>`;
+}
+
 function renderEvent(ev,data){
+  const cred=credibility(ev);
   return `<div class="card">
-    <h2>${ev.name}</h2>
+    <h2>${ev.name} ${gate(cred)}</h2>
     <div class="kv"><b>Definition.</b> ${ev.definition||''}</div>
     <div class="kv"><b>Rationale.</b> ${ev.rationale||''}</div>
     <div class="kv dim">Target: ${ev.target} · forward return from the trigger-day close (event-study convention).</div>
@@ -256,6 +332,8 @@ function renderEvent(ev,data){
       <span class="tag">${ev.firstDate} → ${ev.lastDate}</span>
       ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
     </div>
+    <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}</div>
+    ${livePanel(ev)}
     <div class="sec-lbl">Forward returns — conditional vs baseline</div>
     ${chart(ev)}
     <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
@@ -273,8 +351,8 @@ let DATA=null, current=0;
 function paint(){
   const root=document.getElementById('root');
   if(!DATA||!DATA.events.length){root.innerHTML='<div class="err">No events in results.</div>';return;}
-  const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${e.name} (${e.nEpisodes})</div>`).join('');
-  root.innerHTML=`<div class="pills">${pills}</div>`+renderEvent(DATA.events[current],DATA);
+  const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
+  root.innerHTML=summaryCards()+`<div class="pills">${pills}</div>`+renderEvent(DATA.events[current],DATA);
   root.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
   wireFan();
 }
