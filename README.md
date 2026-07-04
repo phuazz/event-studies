@@ -43,25 +43,30 @@ See `private/NEW-REPO-PLAN.md` (carried over from the scanner) for the full migr
 The catalogue above is the **confirmation** engine (hand-registered events, single-target, Yahoo ETF data). In front of it sits a **discovery** stage that mines the Norgate point-in-time US universe for candidate setups, so the catalogue is fed by evidence rather than only by research emails.
 
 ```
-DISCOVERY (Norgate, cross-sectional)   →   lead sheet (private/)   →   PM sign-off   →   PROMOTION   →   catalogue (confirmation + Monte Carlo)   →   dashboard
-   scripts/discovery_scan.py                private/leads/               (human)          scripts/promote_lead.py        engine/events.js
+DISCOVER ─→ lead sheet ─→ VALIDATE ─→ PROMOTE ─→ CONFIRM ─→ PM sign-off ─→ catalogue ─→ dashboard
+discovery_scan   private/   validate_leads  promote_lead  confirm_lead   (human)      (human paste)   engine/events.js
+(drift-α gated)             (deployability) (draft card)  (cross-sectional,
+                                                          pre-registered)
 ```
 
-- **Data feed.** Norgate US via the `norgatedata` package with NDU running locally: survivorship-bias-free (US Equities Delisted database), point-in-time index membership, split/dividend adjusted. `scripts/norgate_universe.py` is the data layer; `scripts/norgate_ready.py --wait` is the STEP-0 readiness gate that refuses a stale (mid-download) feed.
+- **Data feed.** Norgate US via the `norgatedata` package with NDU running locally: survivorship-bias-free (US Equities Delisted database), point-in-time index membership, split/dividend adjusted. `scripts/norgate_universe.py` is the data layer; `scripts/norgate_ready.py --wait` is the STEP-0 readiness gate that refuses a stale feed (it reads the actual last **bar** date, not `last_quoted_date`, which NDU leaves unset on a market-closed day).
 - **Universe.** Point-in-time members of the S&P Composite 1500 (S&P 500 + MidCap 400 + SmallCap 600), delisted members included — the investable set at trigger date `t`. Not a whole-market OTC scan (un-investable, no clean membership).
 - **Fixed archetype grammar** = the multiple-testing budget (declared up front, no free search): mean-reversion, momentum-thrust, volatility/dislocation (single-stock, cross-sectional) + breadth (index-level, computed point-in-time from constituents, target SPY). Each over a small discrete parameter grid.
-- **Guards against being silently wrong:** (1) multiple testing — fixed grammar, pre-2015 discover / 2015→ OOS split, Benjamini-Hochberg FDR, cross-name robustness; (2) pseudo-replication — per-name episode clustering AND independent-market-episode (block-weighted) edge + block bootstrap + random-entry null, with the independent-episode count headlined and `<20` flagged thin; (3) survivorship/look-ahead — delisted database + point-in-time membership, delisting-aware forward returns, causal indicators, trigger-close entry, liquidity-tiered costs.
-- **Output.** A ranked, thin-flagged lead sheet with baseline-vs-conditional and the full cells-tested budget, written to `private/leads/` (gitignored). Nothing auto-promotes; the dashboard is untouched.
+- **Edge measure = drift-adjusted alpha.** Leads are GATED and ranked on each entry's forward return minus that name's own mean forward return (episode-weighted mean CAR), NOT the raw edge or lift-vs-pooled-baseline — at long horizons the raw edge is largely market/size beta, and archetypes that select high-drift names show a fake lift. This is why an apparently strong "mean-reversion" cluster (huge raw edge) is correctly excluded: its drift-adjusted alpha is ≤ 0.
+- **Guards against being silently wrong:** (1) multiple testing — fixed grammar, pre-2015 discover / 2015→ OOS split, Benjamini-Hochberg FDR, cross-name robustness; (2) pseudo-replication — per-name episode clustering AND independent-market-episode (block-weighted) edge + block bootstrap + drift-aware random-entry null, independent-episode count headlined, `<20` flagged thin; (3) survivorship/look-ahead — delisted database + point-in-time membership, delisting-aware forward returns, causal indicators, trigger-close entry, liquidity-tiered costs.
+- **Stages.** *Discover* → ranked lead sheet + full cells-tested budget. *Validate* (`validate_leads.py`) → a deployability stress-test (era stability, size/sector concentration, cost headroom, selection haircut) → SIGN-OFF / WATCH / GRAVEYARD. *Promote* (`promote_lead.py`) → a catalogue-schema card + private candidate (rationale stub, `signOff.approved=false`). *Confirm* (`confirm_lead.py`) → a rigorous single-pre-registered-hypothesis re-test on the full cross-section (drift-adjusted alpha + drift-aware Monte Carlo + SPY-200d regime split + horizon decay curve + episodes-since-registration accrual) → CONFIRMED / CONFIRMED-THIN / NOT-CONFIRMED. All output lands in `private/leads/` (gitignored); nothing auto-promotes; the catalogue and dashboard are untouched until you paste an approved card yourself.
 
-### Run the discovery funnel (local, needs NDU running)
+### Run the funnel (local, needs NDU running)
 
 ```
 python scripts/norgate_ready.py --wait                          # STEP 0: block until the US feed is fresh
 python scripts/discovery_scan.py --build-universe               # first run builds + caches the point-in-time universe
 python scripts/discovery_scan.py                                # → private/leads/lead_sheet_<asof>.{md,json}, cells_tested_<asof>.csv
-python scripts/promote_lead.py --asof <date> --lead <config>    # Stage 2: draft a catalogue card for a ticked lead
+python scripts/validate_leads.py --asof <date>                  # deployability stress-test → private/leads/validation_<date>.{md,json}
+python scripts/promote_lead.py --asof <date> --lead <config>    # draft a catalogue card for a ticked lead
+python scripts/confirm_lead.py --card <config>                  # cross-sectional, pre-registered confirmation → private/leads/confirmations/
 ```
 
-`python scripts/discovery_scan.py --selftest` runs the indicator + statistics tests offline (no Norgate needed). The discovery stage is **local and manual** — it is NOT wired into `.github/workflows/refresh.yml` (GitHub runners have no NDU).
+`python scripts/discovery_scan.py --selftest` runs the indicator + statistics tests offline (no Norgate needed). The whole funnel is **local and manual** — it is NOT wired into `.github/workflows/refresh.yml` (GitHub runners have no NDU).
 
 _Last updated: 2026-07-04._
