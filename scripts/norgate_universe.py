@@ -118,6 +118,21 @@ def expected_last_session(asof: dt.date | None = None) -> dt.date:
     return sessions[-1].date()
 
 
+def _last_bar_date(n, sym: str):
+    """The last actual bar date of a symbol's price series, or None if it has no
+    bars. Authoritative freshness signal (last_quoted_date is unreliable here)."""
+    try:
+        df = n.price_timeseries(
+            sym, stock_price_adjustment_setting=n.StockPriceAdjustmentType.TOTALRETURN,
+            padding_setting=n.PaddingType.NONE, timeseriesformat="pandas-dataframe")
+    except Exception:  # noqa: BLE001
+        return None
+    if df is None or len(df) == 0:
+        return None
+    d = df.index[-1]
+    return d.date() if hasattr(d, "date") else dt.date.fromisoformat(str(d)[:10])
+
+
 def hard_check(n=None, asof: dt.date | None = None) -> dict:
     """The STEP-0 gate, enforced at data-layer level so the scan is self-gating.
 
@@ -134,22 +149,28 @@ def hard_check(n=None, asof: dt.date | None = None) -> dict:
     exp = expected_last_session(asof)
 
     # --- freshness ---
+    # Authoritative signal = the actual last BAR date of the benchmark price series
+    # (what the scan consumes), NOT last_quoted_date: on this feed the latter metadata
+    # field is unpopulated for live symbols even when the series are complete to the
+    # last session (an NDU sync quirk), so it gives a false "stale" negative.
     bench = {}
+    lqd = {}
     for s in BENCHMARKS:
+        last = _last_bar_date(n, s)
         try:
-            v = n.last_quoted_date(s)
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"feed not ready: last_quoted_date({s}) raised {exc}") from exc
-        if v is None:
+            lqd[s] = str(n.last_quoted_date(s))
+        except Exception:  # noqa: BLE001
+            lqd[s] = "raised"
+        if last is None:
             raise RuntimeError(
-                f"feed stale: last_quoted_date({s}) is None — the US Equities price "
+                f"feed not ready: {s} has no price bars yet — the US Equities price "
                 "database is still downloading. Run: python scripts/norgate_ready.py --wait"
             )
-        bench[s] = dt.date.fromisoformat(str(v)[:10])
+        bench[s] = last
     min_bench = min(bench.values())
     if min_bench < exp:
         raise RuntimeError(
-            f"feed stale: oldest benchmark date {min_bench} < last NYSE session {exp}. "
+            f"feed stale: oldest benchmark last bar {min_bench} < last NYSE session {exp}. "
             "Run: python scripts/norgate_ready.py --wait"
         )
 
@@ -183,6 +204,10 @@ def hard_check(n=None, asof: dt.date | None = None) -> dict:
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "expected_last_session": exp.isoformat(),
         "benchmark_last_dates": {k: v.isoformat() for k, v in bench.items()},
+        "benchmark_last_quoted_date_field": lqd,
+        "freshness_note": ("Readiness verified from the actual last BAR date of the "
+                           "benchmark price series; the last_quoted_date metadata field "
+                           "is unpopulated for live symbols on this feed (NDU quirk)."),
         "delisted_symbol_count": n_delisted,
         "delisted_suffixed_count": len(delisted_suffixed),
         "delisted_examples": delisted_suffixed[:5],

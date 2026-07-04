@@ -11,6 +11,18 @@ completes, last_quoted_date() returns the latest bar date. So readiness =
 benchmark symbols return a NON-None date that is >= the last completed NYSE
 session, held stable across two reads.
 
+Failure mode observed 2026-07-04 (a market-closed Saturday; Fri 3 Jul was the
+Independence Day observance): after a clean update, last_quoted_date() AND
+second_last_quoted_date() returned None for EVERY symbol across EVERY database
+(US Equities, US Indices, Forex Spot) while price_timeseries() returned the full,
+correct series through the last session (2026-07-02) and first_quoted_date()
+worked. I.e. the price arrays were present but the "last quoted date" pointer was
+unset — NDU has no live current session on a closed day. Keying readiness solely
+on last_quoted_date() therefore deadlocks the gate across a long weekend even
+though the data is fine. Fix: when last_quoted_date() is None, fall back to the
+last bar date read straight from price_timeseries(), and log loudly that NDU's
+metadata pointer still needs a rebuild.
+
 Date handling: NYSE session dates come from exchange_calendars (calendar 'XNYS').
 No manual weekday/day-offset arithmetic. Python datetime months are 1-indexed.
 
@@ -48,24 +60,52 @@ def expected_last_session(asof=None, cal=None):
     return sessions[-1].date()
 
 
+def _price_tail_date(symbol, lookback_days=25):
+    """Last bar date from the price series itself, as 'YYYY-MM-DD' or None.
+
+    Robust fallback for when last_quoted_date() returns None even though the
+    price array is present and current (the market-closed-day pointer bug noted
+    above). Reads the array directly rather than the possibly-unset pointer.
+    """
+    import norgatedata
+    start = (dt.date.today() - dt.timedelta(days=lookback_days)).isoformat()
+    try:
+        df = norgatedata.price_timeseries(
+            symbol, start_date=start, timeseriesformat="pandas-dataframe")
+    except Exception:  # noqa: BLE001
+        return None
+    if df is None or len(df) == 0:
+        return None
+    try:
+        return df.index[-1].date().isoformat()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def check_once():
     """Return (ready: bool, detail: dict)."""
     import norgatedata
 
     expected = expected_last_session()
     dates = {}
+    method = {}
     for s in BENCHMARKS:
+        d = None
         try:
             d = norgatedata.last_quoted_date(s)
-        except Exception as e:  # noqa: BLE001 - NDU throws bare errors mid-write
+        except Exception:  # noqa: BLE001 - NDU throws bare errors mid-write
             d = None
-            dates[s] = f"ERR:{e!s}"
-            continue
-        # norgatedata returns 'YYYY-MM-DD' str or a date-like; normalise to date.
-        if d is None:
-            dates[s] = None
-        else:
+        if d is not None:
+            # norgatedata returns 'YYYY-MM-DD' str or a date-like; normalise.
             dates[s] = str(d)[:10]
+            method[s] = "meta"
+            continue
+        # last_quoted_date() is None: either mid-download (data absent) or the
+        # market-closed-day pointer bug (data present, pointer unset).
+        # Disambiguate by reading the price array directly.
+        td = _price_tail_date(s)
+        dates[s] = td
+        method[s] = "price-tail" if td is not None else "none"
 
     parsed = []
     for s in BENCHMARKS:
@@ -92,6 +132,8 @@ def check_once():
     detail = {
         "expected_last_session": expected.isoformat(),
         "benchmark_dates": dates,
+        "method": method,
+        "used_fallback": any(m == "price-tail" for m in method.values()),
         "delisted_symbol_count": delisted_n,
     }
     return fresh, detail
@@ -99,9 +141,14 @@ def check_once():
 
 def _print(ready, detail, prefix=""):
     tag = "READY" if ready else "NOT-READY"
+    fb = ""
+    if detail.get("used_fallback"):
+        fb = ("  [via price-tail fallback: NDU last_quoted_date is None across "
+              "databases (market-closed day); price arrays are present but the "
+              "metadata pointer needs an NDU rebuild]")
     print(f"{prefix}[{tag}] expected>={detail['expected_last_session']} "
           f"benchmarks={detail['benchmark_dates']} "
-          f"delisted_symbols={detail['delisted_symbol_count']}")
+          f"delisted_symbols={detail['delisted_symbol_count']}{fb}")
 
 
 def main():
