@@ -133,16 +133,31 @@ def sma(x: np.ndarray, period: int) -> np.ndarray:
 
 
 def rolling_max(x: np.ndarray, win: int) -> np.ndarray:
+    """Trailing inclusive rolling maximum; out[i] uses x[i-win+1 .. i]. Vectorised
+    via a sliding-window view (C-speed) — NaN in a window propagates to NaN, which
+    matches the events.js 'null if any null in range' convention."""
     n = len(x); out = np.full(n, np.nan)
-    for i in range(win - 1, n):
-        out[i] = np.max(x[i - win + 1:i + 1])
+    if n >= win:
+        out[win - 1:] = np.lib.stride_tricks.sliding_window_view(x, win).max(axis=1)
     return out
 
 
 def rolling_min(x: np.ndarray, win: int) -> np.ndarray:
     n = len(x); out = np.full(n, np.nan)
-    for i in range(win - 1, n):
-        out[i] = np.min(x[i - win + 1:i + 1])
+    if n >= win:
+        out[win - 1:] = np.lib.stride_tricks.sliding_window_view(x, win).min(axis=1)
+    return out
+
+
+def rolling_any(mask: np.ndarray, win: int) -> np.ndarray:
+    """Trailing inclusive 'any True within the last `win` bars', vectorised."""
+    n = len(mask); out = np.zeros(n, dtype=bool)
+    if n == 0:
+        return out
+    head = min(win - 1, n)
+    out[:head] = np.logical_or.accumulate(mask[:head])   # partial windows at the start
+    if n >= win:
+        out[win - 1:] = np.lib.stride_tricks.sliding_window_view(mask, win).any(axis=1)
     return out
 
 
@@ -259,11 +274,7 @@ def det_escape_252low(roc_win, thr):
         r = roc(c, roc_win)
         lo = rolling_min(c, 252)
         is_low = ~np.isnan(lo) & (c <= lo + 1e-9)
-        low_recent = np.zeros(len(c), dtype=bool)
-        for i in range(len(c)):
-            k0 = max(0, i - 21 + 1)
-            if is_low[k0:i + 1].any():
-                low_recent[i] = True
+        low_recent = rolling_any(is_low, 21)
         cross = np.zeros(len(c), dtype=bool)
         cross[1:] = (r[1:] > thr) & (r[:-1] <= thr) & np.isfinite(r[1:]) & np.isfinite(r[:-1])
         return cross & low_recent
@@ -286,12 +297,13 @@ def det_breakaway_gap(pct, unfilled_days=10):
         o, h, l, c, _ = _bars(p)
         n = len(c)
         out = np.zeros(n, dtype=bool)
-        for i in range(1, n):
-            if not (o[i] >= c[i - 1] * (1.0 + pct)) or not (c[i - 1] > 0):
-                continue
+        # gap-up days are rare, so iterate only those and check the forward window
+        gap = np.zeros(n, dtype=bool)
+        gap[1:] = (o[1:] >= c[:-1] * (1.0 + pct)) & (c[:-1] > 0) & np.isfinite(o[1:])
+        for i in np.flatnonzero(gap):
             j2 = min(i + unfilled_days, n - 1)
             # unfilled == the gap floor (prior close) is not revisited by any low
-            if np.all(l[i + 1:j2 + 1] > c[i - 1]) if j2 > i else True:
+            if j2 <= i or np.all(l[i + 1:j2 + 1] > c[i - 1]):
                 out[i] = True
         return out
     return f
@@ -537,8 +549,9 @@ def analyse_cell(fwd, mae, sym_ids, episodes, base_fwd_by_sym, horizon, rng):
     ci_lo, ci_hi = float(np.quantile(boot, 0.05)), float(np.quantile(boot, 0.95))
 
     # --- per-name-matched random-entry null, vectorised over episode blocks ---
-    # Memory guard: cap iterations so the (B x n_trades) draw stays ~<=10M cells.
-    b_eff = int(min(BOOT_ITERS, max(500, 10_000_000 // max(n_trades, 1))))
+    # Memory guard: cap iterations so the (B x n_trades) draw stays ~<=15M cells,
+    # with a floor so the p-value keeps usable resolution on very large cells.
+    b_eff = int(min(BOOT_ITERS, max(300, 15_000_000 // max(n_trades, 1))))
     vals = np.empty((b_eff, n_trades), dtype=np.float64)
     for su in np.unique(s):
         cols = np.flatnonzero(s == su)
@@ -623,6 +636,12 @@ def selftest():
     # rolling std matches numpy population std.
     sd = rolling_std(x, 3)
     assert abs(sd[2] - np.std(x[0:3])) < 1e-9, (sd[2], np.std(x[0:3]))
+    # rolling max/min (inclusive trailing) + rolling_any windowing.
+    mx = rolling_max(x, 3); mn = rolling_min(x, 3)
+    assert np.isnan(mx[1]) and mx[2] == 3.0 and mx[4] == 5.0, mx
+    assert np.isnan(mn[1]) and mn[2] == 1.0 and mn[4] == 3.0, mn
+    ra = rolling_any(np.array([0, 1, 0, 0, 0], dtype=bool), 3)
+    assert list(ra.astype(int)) == [0, 1, 1, 1, 0], ra
     # onset / cross helpers.
     c = np.array([0, 0, 1, 1, 0, 1], dtype=bool)
     assert list(onset(c).astype(int)) == [0, 0, 1, 0, 0, 1]
