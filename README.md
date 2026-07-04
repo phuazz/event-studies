@@ -38,4 +38,30 @@ python scripts/pipeline.py        # inject results → docs/index.html
 
 See `private/NEW-REPO-PLAN.md` (carried over from the scanner) for the full migration plan.
 
-_Last updated: 2026-06-30._
+## Two-stage discovery funnel (Norgate)
+
+The catalogue above is the **confirmation** engine (hand-registered events, single-target, Yahoo ETF data). In front of it sits a **discovery** stage that mines the Norgate point-in-time US universe for candidate setups, so the catalogue is fed by evidence rather than only by research emails.
+
+```
+DISCOVERY (Norgate, cross-sectional)   →   lead sheet (private/)   →   PM sign-off   →   PROMOTION   →   catalogue (confirmation + Monte Carlo)   →   dashboard
+   scripts/discovery_scan.py                private/leads/               (human)          scripts/promote_lead.py        engine/events.js
+```
+
+- **Data feed.** Norgate US via the `norgatedata` package with NDU running locally: survivorship-bias-free (US Equities Delisted database), point-in-time index membership, split/dividend adjusted. `scripts/norgate_universe.py` is the data layer; `scripts/norgate_ready.py --wait` is the STEP-0 readiness gate that refuses a stale (mid-download) feed.
+- **Universe.** Point-in-time members of the S&P Composite 1500 (S&P 500 + MidCap 400 + SmallCap 600), delisted members included — the investable set at trigger date `t`. Not a whole-market OTC scan (un-investable, no clean membership).
+- **Fixed archetype grammar** = the multiple-testing budget (declared up front, no free search): mean-reversion, momentum-thrust, volatility/dislocation (single-stock, cross-sectional) + breadth (index-level, computed point-in-time from constituents, target SPY). Each over a small discrete parameter grid.
+- **Guards against being silently wrong:** (1) multiple testing — fixed grammar, pre-2015 discover / 2015→ OOS split, Benjamini-Hochberg FDR, cross-name robustness; (2) pseudo-replication — per-name episode clustering AND independent-market-episode (block-weighted) edge + block bootstrap + random-entry null, with the independent-episode count headlined and `<20` flagged thin; (3) survivorship/look-ahead — delisted database + point-in-time membership, delisting-aware forward returns, causal indicators, trigger-close entry, liquidity-tiered costs.
+- **Output.** A ranked, thin-flagged lead sheet with baseline-vs-conditional and the full cells-tested budget, written to `private/leads/` (gitignored). Nothing auto-promotes; the dashboard is untouched.
+
+### Run the discovery funnel (local, needs NDU running)
+
+```
+python scripts/norgate_ready.py --wait                          # STEP 0: block until the US feed is fresh
+python scripts/discovery_scan.py --build-universe               # first run builds + caches the point-in-time universe
+python scripts/discovery_scan.py                                # → private/leads/lead_sheet_<asof>.{md,json}, cells_tested_<asof>.csv
+python scripts/promote_lead.py --asof <date> --lead <config>    # Stage 2: draft a catalogue card for a ticked lead
+```
+
+`python scripts/discovery_scan.py --selftest` runs the indicator + statistics tests offline (no Norgate needed). The discovery stage is **local and manual** — it is NOT wired into `.github/workflows/refresh.yml` (GitHub runners have no NDU).
+
+_Last updated: 2026-07-04._

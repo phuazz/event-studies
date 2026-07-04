@@ -14,5 +14,9 @@ node_modules/
 .DS_Store
 *.log
 
+# Python (discovery scan tooling)
+__pycache__/
+*.pyc
+
 # Claude Code worktree + per-session preview launch configs
 .claude/
