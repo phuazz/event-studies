@@ -532,9 +532,19 @@ def analyse_cell(fwd, mae, sym_ids, episodes, base_fwd_by_sym, horizon, rng):
     sizes = np.diff(np.concatenate((ep_starts, [n_trades]))).astype(float)
     n_ind = ep_starts.size
 
-    # --- block-weighted edge ---
+    # --- block-weighted edge (raw; can be beta at long horizons) ---
     ep_means = np.add.reduceat(f, ep_starts) / sizes
     cond_median = float(np.median(ep_means))
+
+    # --- drift-adjusted alpha (episode-weighted mean CAR) ---
+    # Subtract each name's OWN mean forward return, so the effect size measures the
+    # SIGNAL, not market/size/sector beta or the fact that some archetypes select
+    # high-drift names. `fwd` is already net of cost and the drift benchmark is
+    # gross, so this is the cost-adjusted alpha. The MEAN (not median) aggregation
+    # keeps it unbiased vs a mean drift benchmark under a right-skewed return.
+    drift = np.array([base_fwd_by_sym[su][horizon].mean() if base_fwd_by_sym[su][horizon].size else 0.0
+                      for su in s])
+    alpha_driftadj = float(np.mean(np.add.reduceat(f - drift, ep_starts) / sizes))
 
     # --- entry-weighted per-trade risk profile ---
     hit = float((fwd > 0).mean())
@@ -574,6 +584,7 @@ def analyse_cell(fwd, mae, sym_ids, episodes, base_fwd_by_sym, horizon, rng):
         "n_trades": int(n_trades),
         "n_independent_episodes": int(n_ind),
         "cond_median": cond_median,
+        "alpha_driftadj": alpha_driftadj,
         "hit_rate": hit,
         "p05": p05, "p95": p95,
         "median_mae": med_mae,

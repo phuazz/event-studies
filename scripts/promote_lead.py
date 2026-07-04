@@ -139,6 +139,7 @@ def _our_numbers(cells):
     out = {}
     for c in cells:
         out.setdefault(c["horizon_label"], {})[c["window"]] = {
+            "alpha_driftadj": c.get("alpha_driftadj"),
             "edge_median": c["cond_median"], "baseline_median": c["base_median"],
             "lift_median": c["lift_median"], "hit_rate": c["hit_rate"],
             "reward_to_mae": c["reward_to_mae"], "sortino": c["sortino"],

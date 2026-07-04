@@ -61,6 +61,9 @@ def _cap(x, hi=99.0):
 
 
 def select_leads(cells):
+    """A config becomes a lead only if its DRIFT-ADJUSTED alpha (signal, not beta)
+    is positive OOS, sign-consistent in-sample, and significant. The pooled lift is
+    reported for context but does NOT gate — at long horizons it can be pure beta."""
     by = {(c["config"], c["horizon"], c["window"]): c for c in cells}
     configs = sorted({c["config"] for c in cells})
     leads = []
@@ -71,11 +74,13 @@ def select_leads(cells):
             isc = by.get((cfg, h, "IS"))
             if not oos or not isc:
                 continue
-            if not (oos["cond_median"] > 0 and oos["lift_median"] > 0 and oos["p_value"] < 0.10):
+            a_oos = oos.get("alpha_driftadj", float("nan"))
+            a_is = isc.get("alpha_driftadj", float("nan"))
+            if not (a_oos > 0 and oos["p_value"] < 0.10):        # positive SIGNAL, significant
                 continue
-            if not (isc["cond_median"] > 0 and isc["lift_median"] > 0):
+            if not (a_is > 0):                                    # sign-consistent discovery
                 continue
-            key = (_cap(oos["reward_to_mae"]), oos["lift_median"])
+            key = (a_oos, _cap(oos["reward_to_mae"]))
             if best is None or key > best_key:
                 allc = by.get((cfg, h, "ALL"))
                 best = {"config": cfg, "family": oos["family"], "horizon": h,
@@ -90,7 +95,7 @@ def select_leads(cells):
 
     leads.sort(key=lambda L: (
         not L["fdr_reject"], L["thin"],
-        -_cap(L["oos"]["reward_to_mae"]), -L["oos"]["lift_median"]))
+        -L["oos"].get("alpha_driftadj", 0.0), -_cap(L["oos"]["reward_to_mae"])))
     return leads
 
 
@@ -133,7 +138,7 @@ def write_lead_sheet(out):
     csv_path = LEADS_DIR / f"cells_tested_{asof}.csv"
     fields = ["config", "family", "horizon", "horizon_label", "window", "n_trades",
               "n_independent_episodes", "n_names", "frac_names_positive",
-              "cond_median", "base_median", "lift_median", "hit_rate", "base_hit",
+              "alpha_driftadj", "cond_median", "base_median", "lift_median", "hit_rate", "base_hit",
               "median_mae", "reward_to_mae", "sortino", "p05", "p95",
               "ci_lo", "ci_hi", "p_value", "null_percentile", "q_value", "fdr_reject"]
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
@@ -154,10 +159,10 @@ def _lead_row(L):
     fdr = "✓" if L["fdr_reject"] else "·"
     rr = _cap(o["reward_to_mae"])
     return (f"| {L['config']} | {L['family']} | {L['horizon_label']} | "
-            f"{_pct(o['cond_median'])} | {_pct(o['base_median'])} | {_pct(o['lift_median'])} | "
+            f"**{_pct(o.get('alpha_driftadj'))}** | {_pct(o['cond_median'])} | {_pct(o['lift_median'])} | "
             f"{o['hit_rate']*100:.0f}% | {rr:.2f} | {o['sortino']:.2f} | "
             f"{o['n_independent_episodes']}{thin} | {o['n_names']} | "
-            f"{o['p_value']:.3f} | {fdr} | {_pct(i['lift_median'])} |")
+            f"{o['p_value']:.3f} | {fdr} | {_pct(i.get('alpha_driftadj'))} |")
 
 
 def _render_md(out, leads, budget, asof):
@@ -212,20 +217,23 @@ def _render_md(out, leads, budget, asof):
     L.append("")
     L.append("## How to read the numbers")
     L.append("")
-    L.append("- **Edge (cond median)** is *block-weighted*: one observation per "
-             "independent market episode (a same-day cross-section of names counts once, "
-             "not 400×). **Lift** = edge − unconditional baseline. **Reward/MAE, Sortino, "
-             "hit-rate, tails** are *entry-weighted* per-trade (what you earn taking every "
-             "signal). All returns are **net of liquidity-tiered round-trip cost**.")
-    L.append("- **p** is vs a random-entry null matched to the exact names and episode "
-             "sizes; **FDR ✓** = survives Benjamini-Hochberg q≤0.10. **Episodes** = "
-             "independent OOS market episodes (<20 ⇒ ⚠️THIN, shown separately, never a "
-             "headline). **IS lift** is the pre-2015 discovery half, shown for "
-             "sign-consistency.")
+    L.append("- **Drift-adj α (OOS)** is the headline and the GATE: each entry's forward "
+             "return minus that name's OWN mean forward return, episode-weighted (mean CAR). "
+             "It strips market/size/sector beta and the fact that some archetypes select "
+             "high-drift names, so it measures the SIGNAL, not buy-and-hold. A config is a "
+             "lead ONLY if this is positive OOS, sign-consistent in-sample, and significant. "
+             "**Raw edge** and **Lift vs base** are the block-weighted conditional median and "
+             "its excess over the pooled baseline — shown for context, but at long horizons "
+             "they are largely beta, so do not read them as signal.")
+    L.append("- **Reward/MAE, Sortino, hit-rate** are *entry-weighted* per-trade, net of "
+             "liquidity-tiered cost. **p** is vs a per-name random-entry null; **FDR ✓** = "
+             "survives Benjamini-Hochberg q≤0.10. **Episodes** = independent OOS market "
+             "episodes (<20 ⇒ ⚠️THIN, never a headline). **IS α** is the pre-2015 "
+             "drift-adjusted alpha, shown for sign-consistency.")
     L.append("")
 
-    hdr = ("| Config | Family | Horizon | Edge (OOS) | Baseline | Lift | Hit | Reward/MAE | "
-           "Sortino | Episodes | Names | p | FDR | IS lift |")
+    hdr = ("| Config | Family | Horizon | Drift-adj α (OOS) | Raw edge | Lift vs base | Hit | "
+           "Reward/MAE | Sortino | Episodes | Names | p | FDR | IS α |")
     sep = "|" + "---|" * 14
 
     L.append(f"## Headline leads ({len(headline)}) — survived OOS, ≥20 independent episodes")
@@ -275,6 +283,13 @@ def _render_md(out, leads, budget, asof):
 
 
 DEFAULT_ASSUMPTIONS = [
+    "Leads are GATED and ranked on drift-adjusted alpha (each entry's forward return "
+    "minus that name's own mean forward return, episode-weighted mean CAR), NOT the raw "
+    "edge or the lift over the pooled baseline. At long horizons the raw edge is largely "
+    "market/size/sector beta, and archetypes that select high-drift names show a fake lift "
+    "against a pooled baseline; the drift adjustment measures the actual signal. The drift "
+    "benchmark is each name's full-sample mean — an attribution benchmark, not a tradeable "
+    "estimate.",
     "Universe scoped to point-in-time members of the S&P 500 / MidCap 400 / SmallCap "
     "600 (the investable S&P Composite 1500), delisted members included. A whole-market "
     "OTC/micro-cap scan is deliberately excluded as un-investable and lacking clean "
