@@ -69,4 +69,8 @@ python scripts/confirm_lead.py --card <config>                  # cross-sectiona
 
 `python scripts/discovery_scan.py --selftest` runs the indicator + statistics tests offline (no Norgate needed). The whole funnel is **local and manual** — it is NOT wired into `.github/workflows/refresh.yml` (GitHub runners have no NDU).
 
+## Global-ETF breadth studies (on-book, SentimenTrader-style)
+
+A separate, on-book strand: cross-sectional breadth studies over the `global_etf` universe (single-country / regional ETFs, Norgate-fed, survivorship-free incl. delisted ETFs). `scripts/etf_breadth_engine.py` builds a five-signal breadth library + an equal-weight composite; `scripts/etf_breadth_confirm.py` pre-registers and confirms the composite-thrust hypothesis as a single test (drift-matched Monte Carlo, sub-period + regime cuts). First result (as-of 2026-07-02): a composite breadth thrust precedes emerging-market / world outperformance over 3–6 months (EEM 6M +5.97% excess, p=0.028; EFA +3.8%, p=0.022; US weakest) — full-sample significant but **era-concentrated** (strong pre-2009, dead 2010–2017, back post-2018), so CONFIRMED-WEAK / conditional on the EM secular regime. Records under `private/etf_breadth/` (gitignored). Nothing admitted to the catalogue/dashboard without sign-off.
+
 _Last updated: 2026-07-04._

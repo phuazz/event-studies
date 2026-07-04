@@ -18,6 +18,42 @@
       "tickers": [
         { "t": "JO", "n": "Coffee (iPath Series B Bloomberg Coffee ETN)", "cls": "Single Commodity" }
       ]
+    },
+    "global_etf": {
+      "_doc": "Single-country / regional equity ETFs for SentimenTrader-style cross-sectional breadth studies. NORGATE-FED and survivorship-free: delisted ETFs are included via the delisted database (e.g. RSX-202212, Russia, delisted 2022) and membership is point-in-time (a name counts only on sessions it actually traded). Benchmark/target: SPY. NOT used by the Yahoo Node pipeline — consumed by the Python breadth engine (scripts/etf_breadth_engine.py). History from 1996 (iShares EWx series).",
+      "_source": "norgate",
+      "_benchmark": "SPY",
+      "tickers": [
+        { "t": "EWJ", "n": "Japan", "cls": "Country ETF" },
+        { "t": "EWG", "n": "Germany", "cls": "Country ETF" },
+        { "t": "EWU", "n": "United Kingdom", "cls": "Country ETF" },
+        { "t": "EWQ", "n": "France", "cls": "Country ETF" },
+        { "t": "EWA", "n": "Australia", "cls": "Country ETF" },
+        { "t": "EWC", "n": "Canada", "cls": "Country ETF" },
+        { "t": "EWH", "n": "Hong Kong", "cls": "Country ETF" },
+        { "t": "EWW", "n": "Mexico", "cls": "Country ETF" },
+        { "t": "EWY", "n": "South Korea", "cls": "Country ETF" },
+        { "t": "EWT", "n": "Taiwan", "cls": "Country ETF" },
+        { "t": "EWZ", "n": "Brazil", "cls": "Country ETF" },
+        { "t": "EWS", "n": "Singapore", "cls": "Country ETF" },
+        { "t": "EWP", "n": "Spain", "cls": "Country ETF" },
+        { "t": "EWI", "n": "Italy", "cls": "Country ETF" },
+        { "t": "EWL", "n": "Switzerland", "cls": "Country ETF" },
+        { "t": "EWN", "n": "Netherlands", "cls": "Country ETF" },
+        { "t": "EWD", "n": "Sweden", "cls": "Country ETF" },
+        { "t": "EWM", "n": "Malaysia", "cls": "Country ETF" },
+        { "t": "EWO", "n": "Austria", "cls": "Country ETF" },
+        { "t": "EWK", "n": "Belgium", "cls": "Country ETF" },
+        { "t": "EZA", "n": "South Africa", "cls": "Country ETF" },
+        { "t": "FXI", "n": "China (large-cap)", "cls": "Country ETF" },
+        { "t": "INDA", "n": "India", "cls": "Country ETF" },
+        { "t": "TUR", "n": "Turkey", "cls": "Country ETF" },
+        { "t": "EIDO", "n": "Indonesia", "cls": "Country ETF" },
+        { "t": "THD", "n": "Thailand", "cls": "Country ETF" },
+        { "t": "EPOL", "n": "Poland", "cls": "Country ETF" },
+        { "t": "EPHE", "n": "Philippines", "cls": "Country ETF" },
+        { "t": "RSX-202212", "n": "Russia (delisted 2022)", "cls": "Country ETF (delisted)" }
+      ]
     }
   },
   "planned": {
