@@ -36,9 +36,9 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const CATALOGUE = path.join(__dirname, '..', 'catalogue', 'catalogue.json');
+const CATALOGUE = process.env.EVENTS_CATALOGUE || path.join(__dirname, '..', 'catalogue', 'catalogue.json');
 const UNIVERSES = path.join(__dirname, '..', 'universes.json');
-const OUT = path.join(__dirname, '..', 'events_results.json');
+const OUT = process.env.EVENTS_OUT || path.join(__dirname, '..', 'events_results.json');
 
 // Forward-return horizons in TRADING days (not calendar days — we index into
 // the bar array, which sidesteps all weekday/holiday date arithmetic).
@@ -459,6 +459,184 @@ function analyseEvent(series, ev, regimeMap) {
   };
 }
 
+// ---------- monthly seasonal analysis ----------
+//
+// A different signal CLASS from the daily kinds above: an ANNUAL seasonal signal
+// measured on a month-end price series. It emits the SAME standard event shape
+// (byHorizon / episodes / priceSeries) so the existing renderer works, but on
+// MONTHLY horizons (3/6/9/12 months) rather than trading-day horizons. Each
+// year's June signal is 12 months apart while the forward window is <= 12 months
+// and consecutive years do not overlap on the 9-month headline, so every signal
+// is its own episode (clusterDays 0).
+
+// JS Date months are 0-INDEXED (January === 0). `month1` here is 1-indexed (the
+// human convention, matching the ISO month substring '06' === June). Returns a
+// 1-indexed {year, month1}. Using day-of-month 1 avoids month-length overflow.
+function addMonths(year, month1, n) {
+  const d = new Date(Date.UTC(year, (month1 - 1) + n, 1)); // (month1-1) converts to 0-indexed for Date
+  return { year: d.getUTCFullYear(), month1: d.getUTCMonth() + 1 };
+}
+
+// Edge-case asserts for the forward-month mapping the seasonal study relies on
+// (vault date-handling rule: assert a month boundary and a year boundary).
+function assertSeasonalDateLogic() {
+  const yb = addMonths(2020, 6, 9);   // June 2020 + 9m -> March 2021 (YEAR boundary)
+  if (!(yb.year === 2021 && yb.month1 === 3)) throw new Error('date logic: June+9m != next March');
+  const iy = addMonths(2020, 6, 3);   // June 2020 + 3m -> September 2020 (intra-year)
+  if (!(iy.year === 2020 && iy.month1 === 9)) throw new Error('date logic: June+3m != September');
+  const mb = addMonths(2020, 10, 3);  // October 2020 + 3m -> January 2021 (month + year boundary)
+  if (!(mb.year === 2021 && mb.month1 === 1)) throw new Error('date logic: Oct+3m != next January');
+}
+
+// Strong 2nd quarter (April-June) -> forward return on the price index. A June
+// month-end signal fires when the S&P 500 either rose in each of April, May and
+// June (three consecutive up months) and/or gained >= q2GainThreshold from the
+// end of March to the end of June. Forward returns are measured on the monthly
+// price index from the June close; 9M (June -> the following March) is the
+// headline. Baseline = all overlapping monthly h-month returns; significance
+// from the same random-entry Monte Carlo as the daily kinds, on monthly bars.
+function analyseSeasonalStrongQuarter(target, ev) {
+  assertSeasonalDateLogic();
+  if (!target.monthly || !target.monthly.length)
+    throw new Error(`${ev.target}: no monthly series (seasonal signal needs month-end closes)`);
+
+  const bars = target.monthly;
+  const dates = bars.map(b => b.d);
+  const ac = bars.map(b => b.ac);
+  const N = ac.length;
+
+  const forwardMonths = ev.forwardMonths || [3, 6, 9, 12];
+  const labels = forwardMonths.map(h => `${h}M`);
+  const q2Thr = ev.q2GainThreshold != null ? ev.q2GainThreshold : 0.10;
+  const smaMonths = ev.regimeSmaMonths || 10;
+
+  // Month-index map keyed by 'YYYY-MM' (the ISO month substring is 1-indexed).
+  const idxByYm = {};
+  for (let i = 0; i < N; i++) idxByYm[dates[i].slice(0, 7)] = i;
+
+  // Regime tag from the GSPC monthly series ITSELF (a 10-month SMA), not SPY daily.
+  const smaMonthly = sma(ac, smaMonths);
+
+  // One candidate per year with Mar/Apr/May/Jun month-end closes present.
+  const years = [...new Set(dates.map(d => +d.slice(0, 4)))].sort((a, b) => a - b);
+  const signals = []; // { idx: June bar index, year, q2, up3 }
+  for (const Y of years) {
+    const iM = idxByYm[`${Y}-03`], iA = idxByYm[`${Y}-04`], iMy = idxByYm[`${Y}-05`], iJ = idxByYm[`${Y}-06`];
+    if (iM == null || iA == null || iMy == null || iJ == null) continue;
+    const cM = ac[iM], cA = ac[iA], cMy = ac[iMy], cJ = ac[iJ];
+    const up3 = cA > cM && cMy > cA && cJ > cMy;
+    const q2 = cJ / cM - 1;
+    if (up3 || q2 >= q2Thr) signals.push({ idx: iJ, year: Y, q2, up3 });
+  }
+  const episodes = signals.map(s => s.idx); // each signal is its own episode
+
+  // Runtime tie-out on the FIRST completed signal: a June + 9-month forward bar
+  // must be dated to the following March (ties the abstract date math to data).
+  if (forwardMonths.includes(9)) {
+    for (const s of signals) {
+      if (s.idx + 9 < N) {
+        const fd = dates[s.idx + 9], exp = addMonths(s.year, 6, 9);
+        if (+fd.slice(0, 4) !== exp.year || +fd.slice(5, 7) !== exp.month1)
+          throw new Error(`seasonal forward tie-out: ${dates[s.idx]} +9m -> ${fd}, expected ${exp.year}-${String(exp.month1).padStart(2, '0')}`);
+        break;
+      }
+    }
+  }
+
+  // Baseline: all overlapping monthly h-month returns.
+  const baseFwd = {};
+  for (const h of forwardMonths) {
+    const arr = [];
+    for (let i = 0; i + h < N; i++) arr.push(ac[i + h] / ac[i] - 1);
+    baseFwd[h] = arr;
+  }
+
+  const byHorizon = forwardMonths.map((h, hi) => {
+    const fwd = [], mfe = [], mae = [];
+    for (const idx of episodes) {
+      if (idx + h >= N) continue;
+      fwd.push(ac[idx + h] / ac[idx] - 1);
+      let hiR = -Infinity, loR = Infinity;
+      for (let k = 1; k <= h; k++) {
+        const r = ac[idx + k] / ac[idx] - 1;
+        if (r > hiR) hiR = r;
+        if (r < loR) loR = r;
+      }
+      mfe.push(hiR); mae.push(loR);
+    }
+    const n = fwd.length;
+    const base = baseFwd[h];
+    const condMedian = median(fwd);
+
+    // Random-entry Monte Carlo, monthly overlapping windows, same n.
+    let ge = 0;
+    const maxStart = N - h;
+    if (n > 0 && maxStart > 0) {
+      for (let b = 0; b < BOOT_ITERS; b++) {
+        const draws = [];
+        for (let j = 0; j < n; j++) draws.push(base[randInt(maxStart)]);
+        if (median(draws) >= condMedian) ge++;
+      }
+    }
+    const pTwoSided = n > 0 ? 2 * Math.min(ge, BOOT_ITERS - ge) / BOOT_ITERS : NaN;
+    const percentile = n > 0 ? 1 - ge / BOOT_ITERS : NaN;
+
+    // CI on the conditional median by resampling episodes with replacement.
+    let ciLo = NaN, ciHi = NaN;
+    if (n > 1) {
+      const meds = [];
+      for (let b = 0; b < BOOT_ITERS; b++) {
+        const s = [];
+        for (let j = 0; j < n; j++) s.push(fwd[randInt(n)]);
+        meds.push(median(s));
+      }
+      ciLo = quantile(meds, 0.05); ciHi = quantile(meds, 0.95);
+    }
+
+    return {
+      h, label: labels[hi], n,
+      mean: mean(fwd), median: condMedian, hit: hitRate(fwd),
+      mfeMedian: median(mfe), maeMedian: median(mae),
+      baseMean: mean(base), baseMedian: median(base), baseHit: hitRate(base),
+      edgeMedian: condMedian - median(base),
+      ciLo, ciHi, pValue: pTwoSided, percentile
+    };
+  });
+
+  // Episode rows with per-horizon forward returns (%) + regime tag.
+  const episodeRows = signals.map(s => {
+    const idx = s.idx;
+    const fwd = {};
+    for (const h of forwardMonths) fwd[h] = idx + h < N ? +((ac[idx + h] / ac[idx] - 1) * 100).toFixed(2) : null;
+    const regime = smaMonthly[idx] == null ? null : (ac[idx] > smaMonthly[idx] ? 'on' : 'off');
+    return { date: dates[idx], idx, regime, fwd };
+  });
+  const onCount = episodeRows.filter(e => e.regime === 'on').length;
+  const offCount = episodeRows.filter(e => e.regime === 'off').length;
+
+  // priceSeries: monthly bars; `ind` = the trailing Q2 return % at every June
+  // bar (signal or not), else null — the indicator behind the signal.
+  const q2AtJune = {};
+  for (const Y of years) {
+    const iM = idxByYm[`${Y}-03`], iJ = idxByYm[`${Y}-06`];
+    if (iM != null && iJ != null) q2AtJune[iJ] = +((ac[iJ] / ac[iM] - 1) * 100).toFixed(1);
+  }
+  const priceSeries = bars.map((b, i) => ({ d: b.d, ac: +ac[i].toFixed(2), ind: i in q2AtJune ? q2AtJune[i] : null }));
+
+  return {
+    nTriggers: signals.length,
+    nEpisodes: episodes.length,
+    clusterDays: 0,
+    firstDate: episodes.length ? dates[episodes[0]] : null,
+    lastDate: episodes.length ? dates[episodes[episodes.length - 1]] : null,
+    regimeSplit: { on: onCount, off: offCount, untagged: episodeRows.length - onCount - offCount },
+    indicatorName: 'Q2 return %',
+    byHorizon,
+    episodes: episodeRows,
+    priceSeries
+  };
+}
+
 // ---------- main ----------
 
 function main() {
@@ -494,6 +672,23 @@ function main() {
   for (const ev of cat.events) {
     if (!ev.rationale) { console.warn(`SKIP ${ev.id}: no rationale (not admitted to the catalogue).`); continue; }
     console.log(`Analysing ${ev.id} (${ev.kind})...`);
+
+    // Monthly seasonal kind: emits the standard shape on monthly horizons, then
+    // skips the daily analyseEvent path entirely (its own dispatch + push).
+    if (ev.kind === 'seasonal_strong_quarter') {
+      const target = loadTicker(ev.target);
+      const res = analyseSeasonalStrongQuarter(target, ev);
+      out.events.push({
+        id: ev.id, name: ev.name, kind: ev.kind,
+        target: ev.target, cadence: 'monthly',
+        rationale: ev.rationale, definition: ev.definition,
+        entryNote: 'Forward return measured on the monthly price index from the June month-end close (event-study convention).',
+        ...res
+      });
+      console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
+      continue;
+    }
+
     let series;
     if (ev.kind === 'rsi_ob_to_mid') {
       series = detectRsiOverboughtToMid(loadTicker(ev.target), ev);

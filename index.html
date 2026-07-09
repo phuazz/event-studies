@@ -287,6 +287,7 @@ function gateDot(c){const col=c.action==='act'?'var(--gn)':c.action==='ignore'?'
 // Live actual-vs-expected: the most recent trigger, if still within the 1Y
 // forward window, marked-to-market against the expected (median) path.
 function liveStatus(ev){
+  if(ev.cadence==='monthly') return null; // daily-cadence marked-to-market does not apply to a monthly seasonal signal
   const ps=ev.priceSeries||[], eps=ev.episodes||[]; if(!eps.length) return null;
   const last=eps[eps.length-1]; if(last.idx==null) return null;
   const k=ps.length-1-last.idx; if(k<=0) return null;
@@ -333,12 +334,14 @@ function renderEvent(ev,data){
       ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
     </div>
     <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}</div>
-    ${livePanel(ev)}
+    ${ev.cadence==='monthly'?'':livePanel(ev)}
     <div class="sec-lbl">Forward returns — conditional vs baseline</div>
     ${chart(ev)}
-    <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
+    ${ev.cadence==='monthly'
+      ? `<div class="kv dim" style="font-size:12.5px;margin-top:10px">Annual seasonal signal — the daily-cadence forward-return fan does not apply; see the per-horizon table below.</div>`
+      : `<div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
     ${fanChart(ev)}
-    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.</div>
+    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.</div>`}
     <div class="sec-lbl">Per-horizon statistics</div>
     ${statsTable(ev)}
     <div class="sec-lbl">Episodes</div>

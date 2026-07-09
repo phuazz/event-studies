@@ -40,6 +40,19 @@
       "clusterDays": 21,
       "rationale": "Re-test of the SentimenTrader coffee study, now possible because JO (a coffee ETN) sits in its own single_cmdty universe — the instrument the scanner's 56-ETF book never carried, which is why this was previously shelved as not-testable. Mechanism: a violent 5-day momentum thrust (>13%) out of a 12-month low is typically a supply-shock relief spike in a structurally mean-reverting commodity; such thrusts have historically faded (a bull trap) rather than initiated durable uptrends. JO is an ETN proxy for front-month Arabica, not the futures the study used, so basis/roll differences apply — flagged, and judged on OUR Monte Carlo, not their printed win rates. This proves the multi-universe pipeline end-to-end.",
       "definition": "Trigger on the session JO's 5-day rate-of-change first exceeds +13% while JO has also printed a 252-day low within the trailing 21 sessions. Forward returns measured on JO from the trigger close (their thesis expects negative 2-6 month returns)."
+    },
+    {
+      "id": "spx-strong-q2-9m-forward",
+      "name": "S&P 500 strong 2nd quarter → 9-month forward",
+      "kind": "seasonal_strong_quarter",
+      "target": "GSPC",
+      "cadence": "monthly",
+      "q2GainThreshold": 0.10,
+      "forwardMonths": [3, 6, 9, 12],
+      "regimeSmaMonths": 10,
+      "clusterDays": 0,
+      "rationale": "A strong second quarter — a price gain in each of April, May and June, and/or a quarterly price gain of 10 per cent or more from the end of March to the end of June — is a momentum-and-participation regime signal. Broad, sustained strength into mid-year has historically been followed by above-base-rate S&P 500 price returns over the following nine months (June close to the following March close). This is not a replication of the SentimenTrader record, which is a proprietary lead re-tested here on our own data; the card reports OUR numbers only. The honest edge is the excess over the unconditional nine-month base rate — the S&P 500 is already positive over roughly four in five nine-month windows — not the raw win rate, and signals cluster in secular bull markets, so the effective sample is thinner than the raw count. A long-only seasonal context signal, judged on our random-entry Monte Carlo, with a thin-sample caveat carried on the card.",
+      "definition": "At each June month-end, flag a 'strong' 2nd quarter when the S&P 500 posts a price gain in each of April, May and June, and/or gains 10% or more from the end of March to the end of June. Forward returns measured on the S&P 500 price index from the June close over 3/6/9/12 months (9M is the headline: June close to the following March close)."
     }
   ]
 }
