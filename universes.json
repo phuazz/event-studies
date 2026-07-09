@@ -13,12 +13,6 @@
         { "t": "SLV", "n": "Silver", "cls": "Commodity" }
       ]
     },
-    "single_cmdty": {
-      "_doc": "Single-commodity instruments NOT in the scanner's 56-ETF book — the first proof of the multi-universe model. Grow with other single commodities as studies require.",
-      "tickers": [
-        { "t": "JO", "n": "Coffee (iPath Series B Bloomberg Coffee ETN)", "cls": "Single Commodity" }
-      ]
-    },
     "global_etf": {
       "_doc": "Single-country / regional equity ETFs for SentimenTrader-style cross-sectional breadth studies. NORGATE-FED and survivorship-free: delisted ETFs are included via the delisted database (e.g. RSX-202212, Russia, delisted 2022) and membership is point-in-time (a name counts only on sessions it actually traded). Benchmark/target: SPY. NOT used by the Yahoo Node pipeline — consumed by the Python breadth engine (scripts/etf_breadth_engine.py). History from 1996 (iShares EWx series).",
       "_source": "norgate",
