@@ -133,14 +133,16 @@ function buildFan(ev){
 
 let FAN=null;
 function fanChart(ev){
-  const fan=buildFan(ev);
+  const fan=ev.fan||buildFan(ev);
   if(fan.length<4){FAN=null;return `<div class="kv dim">Range-of-outcomes fan needs ≥3 episodes with a forward window — not enough here (n=${ev.nEpisodes}).</div>`;}
   const W=720,H=280,mL=46,mR=14,mT=14,mB=26,pw=W-mL-mR,ph=H-mT-mB;
   const K=fan[fan.length-1].k;
   // Latest instance realized path (the most recent trigger — e.g. the live one).
+  // A monthly/seasonal event supplies the engine-precomputed daily fanLatest.
   const ps=ev.priceSeries||[], lastEp=ev.episodes[ev.episodes.length-1];
-  const latest={date:lastEp?lastEp.date:'',path:[]};
-  if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
+  let latest={date:lastEp?lastEp.date:'',path:[]};
+  if(ev.fanLatest){latest={date:ev.fanLatest.date,path:(ev.fanLatest.path||[]).filter(p=>p.k<=K)};}
+  else if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
   // Scale to what is actually DRAWN — p10/p90 bands, the drawdown line, and the
   // latest path — not the raw min/max episode (which would leave dead space).
   let yMin=0,yMax=0; for(const f of fan){yMin=Math.min(yMin,f.p10,f.ddBad);yMax=Math.max(yMax,f.p90);}
@@ -150,7 +152,7 @@ function fanChart(ev){
   const line=key=>fan.map(f=>`${sx(f.k).toFixed(1)},${sy(f[key]).toFixed(1)}`).join(' ');
   const band=(hi,lo)=>fan.map(f=>`${sx(f.k).toFixed(1)},${sy(f[hi]).toFixed(1)}`)
     .concat(fan.slice().reverse().map(f=>`${sx(f.k).toFixed(1)},${sy(f[lo]).toFixed(1)}`)).join(' ');
-  const HZK=[[5,'1W'],[21,'1M'],[63,'3M'],[126,'6M'],[252,'1Y']].filter(([k])=>k<=K);
+  const HZK=[[5,'1W'],[21,'1M'],[63,'3M'],[126,'6M'],[189,'9M'],[252,'1Y']].filter(([k])=>k<=K);
   const markers=HZK.map(([k,l])=>{const f=fan.find(x=>x.k>=k)||fan[fan.length-1];
     return `<circle cx="${sx(f.k).toFixed(1)}" cy="${sy(f.p50).toFixed(1)}" r="3" fill="#1A1A18"/><text x="${sx(f.k).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="11" fill="#6B6863">${l}</text>`}).join('');
   let gl=''; const ticks=4;
@@ -337,11 +339,9 @@ function renderEvent(ev,data){
     ${ev.cadence==='monthly'?'':livePanel(ev)}
     <div class="sec-lbl">Forward returns — conditional vs baseline</div>
     ${chart(ev)}
-    ${ev.cadence==='monthly'
-      ? `<div class="kv dim" style="font-size:12.5px;margin-top:10px">Annual seasonal signal — the daily-cadence forward-return fan does not apply; see the per-horizon table below.</div>`
-      : `<div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
+    <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
     ${fanChart(ev)}
-    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.</div>`}
+    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/9M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.${ev.cadence==='monthly'?' For this annual seasonal signal the fan is drawn on daily bars anchored at each June close.':''}</div>
     <div class="sec-lbl">Per-horizon statistics</div>
     ${statsTable(ev)}
     <div class="sec-lbl">Episodes</div>

@@ -623,6 +623,53 @@ function analyseSeasonalStrongQuarter(target, ev) {
   }
   const priceSeries = bars.map((b, i) => ({ d: b.d, ac: +ac[i].toFixed(2), ind: i in q2AtJune ? q2AtJune[i] : null }));
 
+  // ---- Range-of-outcomes fan on DAILY bars ----
+  // The monthly series is too coarse for a drawdown envelope, so the fan is
+  // built on daily bars: anchor each June signal at its LAST daily bar in June,
+  // then aggregate cumulative-return percentiles + running-min drawdown across
+  // episodes over 252 trading days. This is the exact logic of index.html's
+  // buildFan, precomputed here (so the payload stays lean and the chart matches
+  // the daily tabs). 9M (~189 trading days) sits inside the 1Y window.
+  let fan = null, fanLatest = null;
+  const daily = target.daily || [];
+  if (daily.length > 60) {
+    const dac = daily.map(b => b.ac);
+    const juneAnchor = {}; // year -> last daily-bar index in that June
+    for (let i = 0; i < daily.length; i++) {
+      const ym = daily[i].d.slice(0, 7);
+      if (ym.slice(5, 7) === '06') juneAnchor[+ym.slice(0, 4)] = i; // sorted -> keeps the last June bar
+    }
+    const anchors = signals.map(s => juneAnchor[s.year]).filter(a => a != null);
+    const rnd4 = x => +x.toFixed(4);
+    fan = [{ k: 0, n: anchors.length, p10: 0, p25: 0, p50: 0, p75: 0, p90: 0, mn: 0, mx: 0, ddMed: 0, ddBad: 0 }];
+    for (let k = 1; k <= 252; k++) {
+      const rets = [], dds = [];
+      for (const a of anchors) {
+        if (a + k >= dac.length) continue;
+        const b0 = dac[a];
+        rets.push(dac[a + k] / b0 - 1);
+        let lo = 0;
+        for (let j = 1; j <= k; j++) { const r = dac[a + j] / b0 - 1; if (r < lo) lo = r; }
+        dds.push(lo);
+      }
+      if (rets.length < 3) break;
+      fan.push({
+        k, n: rets.length,
+        p10: rnd4(quantile(rets, 0.1)), p25: rnd4(quantile(rets, 0.25)), p50: rnd4(quantile(rets, 0.5)),
+        p75: rnd4(quantile(rets, 0.75)), p90: rnd4(quantile(rets, 0.9)),
+        mn: rnd4(Math.min(...rets)), mx: rnd4(Math.max(...rets)),
+        ddMed: rnd4(quantile(dds, 0.5)), ddBad: rnd4(quantile(dds, 0.1))
+      });
+    }
+    const lastSig = signals[signals.length - 1];
+    const aL = lastSig ? juneAnchor[lastSig.year] : null;
+    if (aL != null) {
+      const path = [];
+      for (let k = 0; aL + k < dac.length && k <= 252; k++) path.push({ k, v: rnd4(dac[aL + k] / dac[aL] - 1) });
+      fanLatest = { date: dates[lastSig.idx], path };
+    }
+  }
+
   return {
     nTriggers: signals.length,
     nEpisodes: episodes.length,
@@ -633,7 +680,8 @@ function analyseSeasonalStrongQuarter(target, ev) {
     indicatorName: 'Q2 return %',
     byHorizon,
     episodes: episodeRows,
-    priceSeries
+    priceSeries,
+    fan, fanLatest
   };
 }
 

@@ -4,8 +4,9 @@ write data/GSPC.json in the event-engine's shape.
 
 This feeds the "strong 2nd quarter" seasonal event study, which is a PRICE-index
 study (no dividend adjustment), so we use $SPX (price) and NOT $SPXTR (total
-return). The series is month-end resampled for the seasonal signal, plus a ~10y
-daily tail for the sanity check.
+return). The series is month-end resampled for the seasonal signal, plus the
+FULL daily history (the range-of-outcomes fan is built on daily bars, so every
+June signal back to the 1950s needs daily coverage for its forward window).
 
 Design notes:
   - Do NOT gate on norgatedata's last_quoted_date. It returns None today (a
@@ -40,7 +41,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(HERE, "..", "data")
 OUT = os.path.join(DATA_DIR, "GSPC.json")
 
-DAILY_TAIL_YEARS = 10
 SANITY_MAX_STALE_DAYS = 7  # last daily bar must be within a week of "today"
 
 
@@ -58,13 +58,13 @@ def _build_payload(daily_df, monthly_series, source, name):
         if pd.notna(v)
     ]
 
-    # ~10y daily tail for the sanity check / any future daily use.
-    last_daily = daily_df.index[-1]
-    cutoff = last_daily - pd.DateOffset(years=DAILY_TAIL_YEARS)
-    tail = daily_df.loc[daily_df.index >= cutoff]
+    # FULL daily history — the range-of-outcomes fan is built on daily bars, so
+    # every June signal back to the 1950s needs daily coverage for its forward
+    # window. data/GSPC.json is gitignored (an engine INPUT, not the published
+    # dashboard payload), so the larger file is fine.
     daily = [
         {"d": ts.strftime("%Y-%m-%d"), "ac": _round2(row["Close"])}
-        for ts, row in tail.iterrows()
+        for ts, row in daily_df.iterrows()
         if pd.notna(row["Close"])
     ]
 
