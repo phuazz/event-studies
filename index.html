@@ -288,15 +288,37 @@ function gateDot(c){const col=c.action==='act'?'var(--gn)':c.action==='ignore'?'
 
 // Live actual-vs-expected: the most recent trigger, if still within the 1Y
 // forward window, marked-to-market against the expected (median) path.
+// Cadence-agnostic: `ev.fan`/`ev.fanLatest` (a monthly seasonal event — precomputed
+// by the engine on DAILY bars) and buildFan/priceSeries (daily events) are BOTH
+// indexed by forward trading day k, so one comparison serves either.
 function liveStatus(ev){
-  if(ev.cadence==='monthly') return null; // daily-cadence marked-to-market does not apply to a monthly seasonal signal
-  const ps=ev.priceSeries||[], eps=ev.episodes||[]; if(!eps.length) return null;
-  const last=eps[eps.length-1]; if(last.idx==null) return null;
-  const k=ps.length-1-last.idx; if(k<=0) return null;
-  const mtm=ps[ps.length-1].ac/ps[last.idx].ac-1;
-  const fan=buildFan(ev); const f=fan.find(x=>x.k>=k)||fan[fan.length-1];
-  let lo=0,hi=0; for(let j=1;j<=k;j++){const r=ps[last.idx+j].ac/ps[last.idx].ac-1; if(r<lo)lo=r; if(r>hi)hi=r;}
-  return {date:last.date,k,mtm,expMed:f?f.p50:null,instMAE:lo,instMFE:hi,live:k<=252};
+  const fan=ev.fan||buildFan(ev); if(!fan||fan.length<4) return null;
+  let date,k,mtm,lo=0,hi=0;
+  if(ev.fanLatest){
+    const path=ev.fanLatest.path||[]; if(path.length<2) return null;
+    date=ev.fanLatest.date; k=path[path.length-1].k; mtm=path[path.length-1].v;
+    for(const p of path){ if(p.k===0) continue; if(p.v<lo)lo=p.v; if(p.v>hi)hi=p.v; }
+  }else{
+    const ps=ev.priceSeries||[], eps=ev.episodes||[]; if(!eps.length) return null;
+    const last=eps[eps.length-1]; if(last.idx==null) return null;
+    k=ps.length-1-last.idx; if(k<=0) return null;
+    date=last.date; mtm=ps[ps.length-1].ac/ps[last.idx].ac-1;
+    for(let j=1;j<=k;j++){const r=ps[last.idx+j].ac/ps[last.idx].ac-1; if(r<lo)lo=r; if(r>hi)hi=r;}
+  }
+  const f=fan.find(x=>x.k>=k)||fan[fan.length-1];
+  return {date,k,mtm,expMed:f?f.p50:null,f,instMAE:lo,instMFE:hi,live:k<=252};
+}
+// Where the live mark sits among the SAME event's historical episode paths at the
+// same forward day. Reported as a BAND, not a percentile number — with n=12-22
+// episodes a precise percentile would be false precision.
+function bandOf(mtm,f){
+  if(!f) return {label:'—',cls:'dim',out:false};
+  if(mtm>f.p90) return {label:'above p90',cls:'pos',out:false};
+  if(mtm>f.p75) return {label:'p75–p90',cls:'pos',out:false};
+  if(mtm>f.p50) return {label:'p50–p75',cls:'',out:false};
+  if(mtm>f.p25) return {label:'p25–p50',cls:'',out:false};
+  if(mtm>f.p10) return {label:'p10–p25',cls:'',out:false};
+  return {label:'below p10',cls:'neg',out:true};
 }
 function livePanel(ev){
   const s=liveStatus(ev); if(!s||!s.live) return '';
@@ -336,7 +358,7 @@ function renderEvent(ev,data){
       ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
     </div>
     <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}</div>
-    ${ev.cadence==='monthly'?'':livePanel(ev)}
+    ${livePanel(ev)}
     <div class="sec-lbl">Forward returns — conditional vs baseline</div>
     ${chart(ev)}
     <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
@@ -350,14 +372,84 @@ function renderEvent(ev,data){
   <div class="note" style="margin-top:18px">${data.multipleTestingNote||''}</div>`;
 }
 
-let DATA=null, current=0;
+// ---- Overview: live-instance monitor ----
+// MECHANICAL read-outs only. The catalogue pre-registers the ENTRY (the trigger)
+// and the forward HORIZONS; it does NOT pre-register an exit, trim or stop rule.
+// So this view reports EVIDENCE — where each live mark sits against the
+// distribution of that event's own historical episodes at the same forward day,
+// and whether it has broken outside it — and leaves the call to the reader. The
+// only tested "exit" we own is the horizon itself.
+
+// Display-only staleness, in whole days. A single UTC millisecond subtraction (no
+// calendar arithmetic); the generated date itself is always shown verbatim beside it.
+function dataAgeDays(data){
+  const g=data.generatedAt?new Date(data.generatedAt):null;
+  if(!g||isNaN(g.getTime())) return null;
+  return Math.floor((Date.now()-g.getTime())/86400000);
+}
+
+function renderOverview(data){
+  const P=v=>(v==null||Number.isNaN(v)?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%');
+  const age=dataAgeDays(data), stale=age!=null&&age>3;
+  const asOf=(data.dailyWindow&&data.dailyWindow.end)||'?';
+  const fresh=`<div class="kv" style="margin-bottom:14px">
+    ${stale?'<span class="tag warn">⚠ stale</span> ':''}Marks as of <b>${asOf}</b>
+    <span class="dim">· generated ${(data.generatedAt||'').slice(0,10)}${age!=null?` (${age} day${age===1?'':'s'} ago)`:''}</span>
+    ${stale?'<div class="dim" style="margin-top:4px">Refresh before acting on anything below: <code>node scripts/fetch_history.js --max-age-hours=0</code> then <code>node engine/events.js</code>.</div>':''}</div>`;
+
+  const rows=data.events.map(ev=>({ev,s:liveStatus(ev),c:credibility(ev)})).filter(r=>r.s&&r.s.live);
+
+  const banner=`<div class="live" style="background:#FFFBEB;border-color:#FDE68A">
+    <b>What this reads — and what it does not.</b> The catalogue pre-registers the <b>entry</b> and the <b>forward horizons</b>; it does <b>not</b> pre-register an exit, trim or stop. These columns are evidence, not instructions. The only tested exit is the horizon itself — any trim or add is judgement, not a backtested rule. Bands rest on n=12–22 episodes and are thin, especially early in a window.</div>`;
+
+  if(!rows.length) return `<div class="card"><h2>Overview — live instances</h2>${fresh}${banner}
+    <div class="kv dim" style="margin-top:12px">No signal is currently inside its forward window. Nothing to track.</div></div>`;
+
+  const head=`<tr><th>Signal</th><th>Gate</th><th>Triggered</th><th>Elapsed</th><th>Mark</th><th>Exp. median</th><th>Band vs history</th><th>Trough</th><th>Hist. worst DD</th><th>Read</th></tr>`;
+  const body=rows.map(({ev,s,c})=>{
+    const b=bandOf(s.mtm,s.f);
+    const ddBreach=s.f&&s.f.ddBad!=null&&s.instMAE<s.f.ddBad;
+    const early=s.k<21;
+    // Two distinct severities, kept distinct: a trough deeper than the
+    // 90th-percentile-worst historical drawdown is a genuine break with precedent;
+    // a mark merely below p10 is the worst decile — the edge of the distribution,
+    // not outside it.
+    let read='in line',readCls='';
+    if(ddBreach){read='drawdown beyond hist. worst';readCls='neg';}
+    else if(b.out){read='worst decile vs history';readCls='neg';}
+    else if(s.expMed!=null&&s.mtm-s.expMed>0.005){read='ahead of median';readCls='pos';}
+    else if(s.expMed!=null&&s.mtm-s.expMed<-0.005){read='behind median';readCls='';}
+    return `<tr>
+      <td><b>${ev.name}</b>${early?'<br><span class="dim" style="font-size:11.5px">early in window — band is noisy</span>':''}</td>
+      <td>${gate(c)}</td>
+      <td class="dim">${s.date}</td>
+      <td class="dim">${s.k}d · ~${(s.k/21).toFixed(1)}mo of 12</td>
+      <td class="${sgn(s.mtm)}">${P(s.mtm)}</td>
+      <td class="dim">${P(s.expMed)}</td>
+      <td class="${b.cls}">${b.label}${s.f?` <span class="dim">(n=${s.f.n})</span>`:''}</td>
+      <td class="neg">${P(s.instMAE)}</td>
+      <td class="dim">${P(s.f?s.f.ddBad:null)}</td>
+      <td class="${readCls}"><b>${read}</b></td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="card"><h2>Overview — live instances</h2>${fresh}
+    <div class="kv dim">Each live signal marked to market from its trigger close, against the 10th/25th/50th/75th/90th percentiles of its OWN historical episode paths at the same forward trading day. <b>Band vs history</b> is where the mark sits now; <b>Hist. worst DD</b> is the 90th-percentile-worst running drawdown across those episodes by this point — a mark below it means this instance is behaving unlike its precedents.</div>
+    ${banner}
+    <div class="sec-lbl">Live instances (${rows.length})</div>
+    <table>${head}${body}</table>
+  </div>`;
+}
+
+let DATA=null, current=-1; // -1 = Overview (the landing view)
 function paint(){
   const root=document.getElementById('root');
   if(!DATA||!DATA.events.length){root.innerHTML='<div class="err">No events in results.</div>';return;}
-  const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
-  root.innerHTML=summaryCards()+`<div class="pills">${pills}</div>`+renderEvent(DATA.events[current],DATA);
+  const ov=`<div class="pill ${current===-1?'on':''}" data-i="-1">Overview</div>`;
+  const pills=ov+DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
+  root.innerHTML=summaryCards()+`<div class="pills">${pills}</div>`+(current===-1?renderOverview(DATA):renderEvent(DATA.events[current],DATA));
   root.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
-  wireFan();
+  if(current!==-1) wireFan();
 }
 
 async function boot(){
