@@ -630,7 +630,7 @@ function analyseSeasonalStrongQuarter(target, ev) {
   // episodes over 252 trading days. This is the exact logic of index.html's
   // buildFan, precomputed here (so the payload stays lean and the chart matches
   // the daily tabs). 9M (~189 trading days) sits inside the 1Y window.
-  let fan = null, fanLatest = null;
+  let fan = null, fanPrior = null, fanLatest = null;
   const daily = target.daily || [];
   if (daily.length > 60) {
     const dac = daily.map(b => b.ac);
@@ -641,26 +641,39 @@ function analyseSeasonalStrongQuarter(target, ev) {
     }
     const anchors = signals.map(s => juneAnchor[s.year]).filter(a => a != null);
     const rnd4 = x => +x.toFixed(4);
-    fan = [{ k: 0, n: anchors.length, p10: 0, p25: 0, p50: 0, p75: 0, p90: 0, mn: 0, mx: 0, ddMed: 0, ddBad: 0 }];
-    for (let k = 1; k <= 252; k++) {
-      const rets = [], dds = [];
-      for (const a of anchors) {
-        if (a + k >= dac.length) continue;
-        const b0 = dac[a];
-        rets.push(dac[a + k] / b0 - 1);
-        let lo = 0;
-        for (let j = 1; j <= k; j++) { const r = dac[a + j] / b0 - 1; if (r < lo) lo = r; }
-        dds.push(lo);
+
+    const mkFan = (anchorList) => {
+      const out = [{ k: 0, n: anchorList.length, p10: 0, p25: 0, p50: 0, p75: 0, p90: 0, mn: 0, mx: 0, ddMed: 0, ddBad: 0 }];
+      for (let k = 1; k <= 252; k++) {
+        const rets = [], dds = [];
+        for (const a of anchorList) {
+          if (a + k >= dac.length) continue;
+          const b0 = dac[a];
+          rets.push(dac[a + k] / b0 - 1);
+          let lo = 0;
+          for (let j = 1; j <= k; j++) { const r = dac[a + j] / b0 - 1; if (r < lo) lo = r; }
+          dds.push(lo);
+        }
+        if (rets.length < 3) break;
+        out.push({
+          k, n: rets.length,
+          p10: rnd4(quantile(rets, 0.1)), p25: rnd4(quantile(rets, 0.25)), p50: rnd4(quantile(rets, 0.5)),
+          p75: rnd4(quantile(rets, 0.75)), p90: rnd4(quantile(rets, 0.9)),
+          mn: rnd4(Math.min(...rets)), mx: rnd4(Math.max(...rets)),
+          ddMed: rnd4(quantile(dds, 0.5)), ddBad: rnd4(quantile(dds, 0.1))
+        });
       }
-      if (rets.length < 3) break;
-      fan.push({
-        k, n: rets.length,
-        p10: rnd4(quantile(rets, 0.1)), p25: rnd4(quantile(rets, 0.25)), p50: rnd4(quantile(rets, 0.5)),
-        p75: rnd4(quantile(rets, 0.75)), p90: rnd4(quantile(rets, 0.9)),
-        mn: rnd4(Math.min(...rets)), mx: rnd4(Math.max(...rets)),
-        ddMed: rnd4(quantile(dds, 0.5)), ddBad: rnd4(quantile(dds, 0.1))
-      });
-    }
+      return out;
+    };
+
+    // `fan` spans EVERY episode — the descriptive range-of-outcomes chart on the card.
+    fan = mkFan(anchors);
+    // `fanPrior` EXCLUDES the most recent signal, because the live instance must not
+    // sit inside its own benchmark. The live monitor compares against PRIOR episodes
+    // only; including the live path lets a bad instance drag down the very
+    // distribution it is being judged against, understating how unusual it is.
+    fanPrior = anchors.length > 1 ? mkFan(anchors.slice(0, -1)) : null;
+
     const lastSig = signals[signals.length - 1];
     const aL = lastSig ? juneAnchor[lastSig.year] : null;
     if (aL != null) {
@@ -681,7 +694,7 @@ function analyseSeasonalStrongQuarter(target, ev) {
     byHorizon,
     episodes: episodeRows,
     priceSeries,
-    fan, fanLatest
+    fan, fanPrior, fanLatest
   };
 }
 
