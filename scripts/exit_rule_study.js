@@ -167,14 +167,15 @@ function runStratum(name, episodes, H, barred) {
     }).filter(x => x !== null);
   });
 
+  // Flags first — `base` is itself a cell, so its rets must survive the whole pass.
   cells.forEach(c => {
     c.beatsMedian = c.median1x > base.median1x;
     c.beatsDD = c.maxDD > base.maxDD;         // less negative = better
     c.barred = barred.includes(c.id);
     c.degenerate = c.id !== 'E0' &&
       c.rets.every((x, i) => Math.abs(x - base.rets[i]) < 1e-12);
-    delete c.rets; delete c.dds;
   });
+  cells.forEach(c => { delete c.rets; delete c.dds; });
 
   return { name, horizon: H, nEpisodes: episodes.length, nClusters: cids.length, cells };
 }
