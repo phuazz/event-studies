@@ -68,6 +68,34 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .brk span.b{font-size:11.5px;background:var(--sa);border-radius:6px;padding:3px 8px;color:var(--t2)}
 .live{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--rs);padding:12px 15px;margin:14px 0;font-size:13px;line-height:1.65;color:var(--t1)}
 .live b{font-weight:700}
+/* overview — severity-led live monitor: verdict first, colour = severity */
+.views{display:flex;gap:8px;margin-bottom:6px}
+.view{padding:8px 16px;font-size:14px;font-weight:600;border:1px solid var(--bd);border-radius:var(--rs);
+  background:var(--sf);color:var(--t2);cursor:pointer;transition:all .12s}
+.view.on{background:var(--t1);color:#fff;border-color:var(--t1)}
+.plabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin:16px 0 8px}
+.ov-state{font-size:14.5px;color:var(--t2);margin:2px 0 16px;line-height:1.6}
+.ov-state b{color:var(--t1)}
+.ov{border:1px solid var(--bd);border-left:4px solid #CFCEC8;border-radius:var(--r);background:var(--sf);
+  padding:16px 18px;margin-bottom:12px}
+.ov.sev-breach{border-left-color:var(--rd);background:#FFFCFB}
+.ov.sev-edge{border-left-color:var(--am)}
+.ov-verdict{font-size:16.5px;font-weight:700;letter-spacing:-.2px;line-height:1.3}
+.ov.sev-breach .ov-verdict{color:var(--rd)}
+.ov.sev-edge .ov-verdict{color:var(--am)}
+.ov-name{font-size:13px;color:var(--t2);font-weight:600;margin-top:3px}
+.ov-grid{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center;margin-top:14px}
+@media(max-width:760px){.ov-grid{grid-template-columns:1fr;gap:12px}}
+.ov-facts{font-size:13.5px;color:var(--t2);line-height:1.75}
+.ov-facts b{color:var(--t1);font-variant-numeric:tabular-nums}
+.ov-meta{font-size:12px;color:var(--t3);margin-top:8px;line-height:1.6}
+.ov-quiet{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:11px 16px;
+  border:1px solid var(--bd);border-left:4px solid #CFCEC8;border-radius:var(--rs);background:var(--sf);
+  font-size:13px;color:var(--t2);margin-bottom:8px;flex-wrap:wrap}
+.ov-quiet b{color:var(--t1)}
+details.disc{margin:14px 0 0;font-size:12.5px;color:var(--t3)}
+details.disc summary{cursor:pointer;color:var(--t2);font-weight:600;user-select:none}
+details.disc div{margin-top:9px;line-height:1.75}
 @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}}
 /* fan */
 .fan-wrap{position:relative}
@@ -305,8 +333,53 @@ function liveStatus(ev){
     date=last.date; mtm=ps[ps.length-1].ac/ps[last.idx].ac-1;
     for(let j=1;j<=k;j++){const r=ps[last.idx+j].ac/ps[last.idx].ac-1; if(r<lo)lo=r; if(r>hi)hi=r;}
   }
+  // Direction over the last 5 forward days (is it still deteriorating, or turning?)
+  // and whether the instance is sitting AT its trough right now — i.e. not bouncing.
+  let chg5=null;
+  if(ev.fanLatest){
+    const path=ev.fanLatest.path||[], prev=path.find(p=>p.k===k-5);
+    if(prev) chg5=(1+mtm)/(1+prev.v)-1;
+  }else{
+    const ps=ev.priceSeries||[];
+    if(ps.length>5) chg5=ps[ps.length-1].ac/ps[ps.length-6].ac-1;
+  }
   const f=fan.find(x=>x.k>=k)||fan[fan.length-1];
-  return {date,k,mtm,expMed:f?f.p50:null,f,instMAE:lo,instMFE:hi,live:k<=252};
+  const atLow=Math.abs(mtm-lo)<1e-9;
+  return {date,k,mtm,expMed:f?f.p50:null,f,instMAE:lo,instMFE:hi,chg5,atLow,live:k<=252};
+}
+// Severity — the page's ONE opinion about what deserves attention. Ordered so the
+// worst sorts first. A drawdown deeper than the 90th-percentile-worst precedent is
+// a genuine break with history; a mark merely below p10 is the edge of the
+// distribution, not outside it; everything else is tracking.
+function severityOf(s){
+  const f=s.f;
+  if(f&&f.ddBad!=null&&s.instMAE<f.ddBad) return {rank:0,key:'breach',label:'Drawdown beyond anything in its history',cls:'sev-breach'};
+  if(f&&s.mtm<f.p10) return {rank:1,key:'edge',label:'At the edge of its historical range',cls:'sev-edge'};
+  if(s.expMed!=null&&s.mtm<s.expMed) return {rank:2,key:'behind',label:'Tracking below the median path',cls:'sev-ok'};
+  return {rank:3,key:'ok',label:'Tracking at or above the median path',cls:'sev-ok'};
+}
+// The band as a SCALE, not a label. The axis spans p10..p90 but is widened to
+// include the live mark, so an instance outside the distribution is drawn OUTSIDE
+// the shaded band — the distinction a text label destroys.
+function bandStrip(s){
+  const f=s.f; if(!f) return '';
+  const W=300,H=38,pad=14;
+  const lo=Math.min(f.p10,s.mtm,0), hi=Math.max(f.p90,s.mtm,0);
+  const span=(hi-lo)||0.01, a=lo-span*0.10, b=hi+span*0.10;
+  const x=v=>pad+(v-a)/(b-a)*(W-2*pad);
+  const yMid=20, sev=severityOf(s);
+  const mCol=sev.key==='breach'||sev.key==='edge'?'#DC2626':'#2563EB';
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;overflow:visible">
+    <line x1="${pad}" y1="${yMid}" x2="${W-pad}" y2="${yMid}" stroke="#E2E0DA" stroke-width="2"/>
+    <rect x="${x(f.p10).toFixed(1)}" y="${yMid-7}" width="${(x(f.p90)-x(f.p10)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.18" rx="2"/>
+    <rect x="${x(f.p25).toFixed(1)}" y="${yMid-7}" width="${(x(f.p75)-x(f.p25)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.30" rx="2"/>
+    <line x1="${x(f.p50).toFixed(1)}" y1="${yMid-9}" x2="${x(f.p50).toFixed(1)}" y2="${yMid+9}" stroke="#1A1A18" stroke-width="2"/>
+    ${a<0&&b>0?`<line x1="${x(0).toFixed(1)}" y1="${yMid-11}" x2="${x(0).toFixed(1)}" y2="${yMid+11}" stroke="#9E9A92" stroke-width="1" stroke-dasharray="2 2"/>`:''}
+    <circle cx="${x(s.mtm).toFixed(1)}" cy="${yMid}" r="5.5" fill="${mCol}" stroke="#fff" stroke-width="1.5"/>
+    <text x="${x(f.p10).toFixed(1)}" y="${H-1}" font-size="9.5" fill="#6B6863" text-anchor="middle">${(f.p10*100).toFixed(0)}%</text>
+    <text x="${x(f.p90).toFixed(1)}" y="${H-1}" font-size="9.5" fill="#6B6863" text-anchor="middle">${(f.p90*100).toFixed(0)}%</text>
+    <text x="${x(f.p50).toFixed(1)}" y="7" font-size="9.5" fill="#6B6863" text-anchor="middle">med</text>
+  </svg>`;
 }
 // Where the live mark sits among the SAME event's historical episode paths at the
 // same forward day. Reported as a BAND, not a percentile number — with n=12-22
@@ -388,56 +461,76 @@ function dataAgeDays(data){
   return Math.floor((Date.now()-g.getTime())/86400000);
 }
 
+const P1=v=>(v==null||Number.isNaN(v)?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%');
+
+// Progress is measured against the horizon the THESIS is stated over (declared per
+// event in the catalogue: a multi-week snap-back for a washout, nine months for the
+// seasonal) — NOT a generic 1Y, which would make a maturing instance look young.
+function thesisProgress(ev,s){
+  const H=ev.thesisHorizonDays;
+  if(!H) return {txt:`${s.k}d elapsed`,pct:null};
+  const pct=Math.min(100,Math.round(s.k/H*100));
+  return {txt:`<b>${s.k}d</b> of its <b>${H}d</b> thesis window · <b>${pct}%</b> through`,pct};
+}
+
+function ovCard({ev,s,c}){
+  const sev=severityOf(s), f=s.f;
+  const gap=s.expMed!=null?s.mtm-s.expMed:null;
+  const prog=thesisProgress(ev,s);
+  const early=s.k<21;
+  const dir=s.chg5==null?'':`Last 5 days: <b class="${sgn(s.chg5)}">${P1(s.chg5)}</b>.`;
+  const low=s.atLow?' <b>It is sitting at its low right now</b> — not bouncing.':'';
+  const worst=(f&&f.ddBad!=null)?`Deepest drawdown any precedent had suffered by this point: <b>${P1(f.ddBad)}</b>. This instance: <b class="neg">${P1(s.instMAE)}</b>.`:'';
+  return `<div class="ov ${sev.cls}">
+    <div class="ov-verdict">${sev.label}</div>
+    <div class="ov-name">${ev.name} ${gate(c)}</div>
+    <div class="ov-grid">
+      <div class="ov-facts">
+        Marked <b class="${sgn(s.mtm)}">${P1(s.mtm)}</b> against an expected <b>${P1(s.expMed)}</b> at this point${gap!=null?` — <b class="${sgn(gap)}">${(gap*100).toFixed(1)}pp</b> ${gap<0?'behind':'ahead of'} the median path`:''}.
+        ${f?`The worst of its <b>${f.n}</b> precedents was <b>${P1(f.p10)}</b> (p10).`:''}${low}
+        <div class="ov-meta">Triggered <b>${s.date}</b> · ${prog.txt}. ${worst} ${dir}
+        ${early?'<br>Early in the window — the band is thin here and this read is noisy.':''}</div>
+      </div>
+      <div>${bandStrip(s)}</div>
+    </div>
+  </div>`;
+}
+
+function ovQuiet({ev,s,c}){
+  const b=bandOf(s.mtm,s.f), prog=thesisProgress(ev,s);
+  return `<div class="ov-quiet">
+    <span><b>${ev.name}</b> <span class="dim">· ${prog.txt.replace(/<\/?b>/g,'')}</span></span>
+    <span><b class="${sgn(s.mtm)}">${P1(s.mtm)}</b> vs <b>${P1(s.expMed)}</b> expected <span class="dim">· ${b.label}</span></span>
+  </div>`;
+}
+
 function renderOverview(data){
-  const P=v=>(v==null||Number.isNaN(v)?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%');
   const age=dataAgeDays(data), stale=age!=null&&age>3;
   const asOf=(data.dailyWindow&&data.dailyWindow.end)||'?';
-  const fresh=`<div class="kv" style="margin-bottom:14px">
-    ${stale?'<span class="tag warn">⚠ stale</span> ':''}Marks as of <b>${asOf}</b>
-    <span class="dim">· generated ${(data.generatedAt||'').slice(0,10)}${age!=null?` (${age} day${age===1?'':'s'} ago)`:''}</span>
-    ${stale?'<div class="dim" style="margin-top:4px">Refresh before acting on anything below: <code>node scripts/fetch_history.js --max-age-hours=0</code> then <code>node engine/events.js</code>.</div>':''}</div>`;
+  const fresh=`<div class="ov-meta" style="margin:0 0 14px">
+    ${stale?'<span class="tag warn">⚠ stale</span> ':''}Marks as of <b>${asOf}</b>${stale?` — ${age} days old. Refresh before acting: <code>node scripts/fetch_history.js --max-age-hours=0</code> then <code>node engine/events.js</code>.`:''}</div>`;
+
+  const disc=`<details class="disc"><summary>What this reads — and what it does not</summary>
+    <div>The catalogue pre-registers the <b>entry</b> and the <b>forward horizons</b>; it does <b>not</b> pre-register an exit, trim or stop. This is evidence, not instruction — the only tested exit is the horizon itself, so any trim or add is judgement, not a backtested rule. Each mark is measured from its trigger close against the 10th/25th/50th/75th/90th percentiles of that event's OWN historical episode paths at the same forward trading day. Bands rest on n=12–22 episodes and are thin, especially early in a window.</div></details>`;
 
   const rows=data.events.map(ev=>({ev,s:liveStatus(ev),c:credibility(ev)})).filter(r=>r.s&&r.s.live);
+  if(!rows.length) return `<div class="card"><h2>Overview</h2>${fresh}
+    <div class="ov-state">No signal is inside its forward window. <b>Nothing to watch.</b></div>${disc}</div>`;
 
-  const banner=`<div class="live" style="background:#FFFBEB;border-color:#FDE68A">
-    <b>What this reads — and what it does not.</b> The catalogue pre-registers the <b>entry</b> and the <b>forward horizons</b>; it does <b>not</b> pre-register an exit, trim or stop. These columns are evidence, not instructions. The only tested exit is the horizon itself — any trim or add is judgement, not a backtested rule. Bands rest on n=12–22 episodes and are thin, especially early in a window.</div>`;
+  rows.forEach(r=>r.sev=severityOf(r.s));
+  rows.sort((a,b)=>a.sev.rank-b.sev.rank); // worst first — the page's one opinion
+  const loud=rows.filter(r=>r.sev.rank<=1), quiet=rows.filter(r=>r.sev.rank>1);
 
-  if(!rows.length) return `<div class="card"><h2>Overview — live instances</h2>${fresh}${banner}
-    <div class="kv dim" style="margin-top:12px">No signal is currently inside its forward window. Nothing to track.</div></div>`;
+  const nB=rows.filter(r=>r.sev.key==='breach').length, nE=rows.filter(r=>r.sev.key==='edge').length;
+  const state=nB||nE
+    ? `<b>${nB?`${nB} instance${nB>1?'s have':' has'} broken beyond anything in ${nB>1?'their':'its'} history`:''}${nB&&nE?'; ':''}${nE?`${nE} sits at the edge of its historical range`:''}.</b> ${quiet.length?`The other ${quiet.length} ${quiet.length>1?'are':'is'} tracking normally.`:''}`
+    : `<b>All ${rows.length} live instance${rows.length>1?'s are':' is'} tracking inside ${rows.length>1?'their':'its'} historical range.</b> Nothing needs attention.`;
 
-  const head=`<tr><th>Signal</th><th>Gate</th><th>Triggered</th><th>Elapsed</th><th>Mark</th><th>Exp. median</th><th>Band vs history</th><th>Trough</th><th>Hist. worst DD</th><th>Read</th></tr>`;
-  const body=rows.map(({ev,s,c})=>{
-    const b=bandOf(s.mtm,s.f);
-    const ddBreach=s.f&&s.f.ddBad!=null&&s.instMAE<s.f.ddBad;
-    const early=s.k<21;
-    // Two distinct severities, kept distinct: a trough deeper than the
-    // 90th-percentile-worst historical drawdown is a genuine break with precedent;
-    // a mark merely below p10 is the worst decile — the edge of the distribution,
-    // not outside it.
-    let read='in line',readCls='';
-    if(ddBreach){read='drawdown beyond hist. worst';readCls='neg';}
-    else if(b.out){read='worst decile vs history';readCls='neg';}
-    else if(s.expMed!=null&&s.mtm-s.expMed>0.005){read='ahead of median';readCls='pos';}
-    else if(s.expMed!=null&&s.mtm-s.expMed<-0.005){read='behind median';readCls='';}
-    return `<tr>
-      <td><b>${ev.name}</b>${early?'<br><span class="dim" style="font-size:11.5px">early in window — band is noisy</span>':''}</td>
-      <td>${gate(c)}</td>
-      <td class="dim">${s.date}</td>
-      <td class="dim">${s.k}d · ~${(s.k/21).toFixed(1)}mo of 12</td>
-      <td class="${sgn(s.mtm)}">${P(s.mtm)}</td>
-      <td class="dim">${P(s.expMed)}</td>
-      <td class="${b.cls}">${b.label}${s.f?` <span class="dim">(n=${s.f.n})</span>`:''}</td>
-      <td class="neg">${P(s.instMAE)}</td>
-      <td class="dim">${P(s.f?s.f.ddBad:null)}</td>
-      <td class="${readCls}"><b>${read}</b></td>
-    </tr>`;
-  }).join('');
-
-  return `<div class="card"><h2>Overview — live instances</h2>${fresh}
-    <div class="kv dim">Each live signal marked to market from its trigger close, against the 10th/25th/50th/75th/90th percentiles of its OWN historical episode paths at the same forward trading day. <b>Band vs history</b> is where the mark sits now; <b>Hist. worst DD</b> is the 90th-percentile-worst running drawdown across those episodes by this point — a mark below it means this instance is behaving unlike its precedents.</div>
-    ${banner}
-    <div class="sec-lbl">Live instances (${rows.length})</div>
-    <table>${head}${body}</table>
+  return `<div class="card"><h2>Overview</h2>${fresh}
+    <div class="ov-state">${state}</div>
+    ${loud.map(ovCard).join('')}
+    ${quiet.length?`<div class="plabel">Tracking normally</div>${quiet.map(ovQuiet).join('')}`:''}
+    ${disc}
   </div>`;
 }
 
@@ -445,10 +538,14 @@ let DATA=null, current=-1; // -1 = Overview (the landing view)
 function paint(){
   const root=document.getElementById('root');
   if(!DATA||!DATA.events.length){root.innerHTML='<div class="err">No events in results.</div>';return;}
-  const ov=`<div class="pill ${current===-1?'on':''}" data-i="-1">Overview</div>`;
-  const pills=ov+DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
-  root.innerHTML=summaryCards()+`<div class="pills">${pills}</div>`+(current===-1?renderOverview(DATA):renderEvent(DATA.events[current],DATA));
-  root.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
+  // Overview is a VIEW; the pills below are ENTITIES. Kept on separate rows so the
+  // two navigation levels are not conflated. The inventory KPI row is study-view
+  // only — on the Overview the state line carries the read instead.
+  const views=`<div class="views"><div class="view ${current===-1?'on':''}" data-i="-1">Overview</div></div>`;
+  const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
+  const nav=views+`<div class="plabel">Studies</div><div class="pills">${pills}</div>`;
+  root.innerHTML=(current===-1?'':summaryCards())+nav+(current===-1?renderOverview(DATA):renderEvent(DATA.events[current],DATA));
+  root.querySelectorAll('.pill,.view').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
   if(current!==-1) wireFan();
 }
 

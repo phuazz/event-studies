@@ -13,6 +13,7 @@
       "oversoldLevel": 30,
       "smaPeriod": 200,
       "clusterDays": 21,
+      "thesisHorizonDays": 63,
       "rationale": "A mean-reversion proxy, NOT a replication of the SentimenTrader GLD study (which rests on a proprietary Optix sentiment index and a 21-year seasonal window we cannot reproduce). Mechanism: a liquid, widely-held commodity ETF that becomes acutely oversold (RSI below 30) while already trading below its 200-day SMA has usually overshot on momentum or forced selling, so a partial snap-back toward the mean is common over the following weeks. Deliberately a COUNTER-TREND test, logged as such, not a trend signal. Forward returns on GLD; significance from our random-entry Monte Carlo; thin-sample caveat applies.",
       "definition": "Trigger on the session GLD's RSI(14) crosses below 30 while GLD closes below its 200-day SMA. Forward returns measured on GLD from the trigger close."
     },
@@ -25,6 +26,7 @@
       "oversoldLevel": 30,
       "smaPeriod": 200,
       "clusterDays": 21,
+      "thesisHorizonDays": 63,
       "rationale": "The same oversold-in-downtrend mean-reversion construct as the GLD card, applied to silver to test whether the washout-bounce holds across precious metals. Silver (SLV) is higher-beta and more volatile than gold, so washouts run deeper and snap-backs are larger but noisier; the natural robustness check on the gold result. Counter-trend by design. Forward returns on SLV; significance from our random-entry Monte Carlo; thin-sample caveat applies.",
       "definition": "Trigger on the session SLV's RSI(14) crosses below 30 while SLV closes below its 200-day SMA. Forward returns measured on SLV from the trigger close."
     },
@@ -38,6 +40,7 @@
       "forwardMonths": [3, 6, 9, 12],
       "regimeSmaMonths": 10,
       "clusterDays": 0,
+      "thesisHorizonDays": 189,
       "rationale": "A strong second quarter — a price gain in each of April, May and June, and/or a quarterly price gain of 10 per cent or more from the end of March to the end of June — is a momentum-and-participation regime signal. Broad, sustained strength into mid-year has historically been followed by above-base-rate S&P 500 price returns over the following nine months (June close to the following March close). This is not a replication of the SentimenTrader record, which is a proprietary lead re-tested here on our own data; the card reports OUR numbers only. The honest edge is the excess over the unconditional nine-month base rate — the S&P 500 is already positive over roughly four in five nine-month windows — not the raw win rate, and signals cluster in secular bull markets, so the effective sample is thinner than the raw count. A long-only seasonal context signal, judged on our random-entry Monte Carlo, with a thin-sample caveat carried on the card.",
       "definition": "At each June month-end, flag a 'strong' 2nd quarter when the S&P 500 posts a price gain in each of April, May and June, and/or gains 10% or more from the end of March to the end of June. Forward returns measured on the S&P 500 price index from the June close over 3/6/9/12 months (9M is the headline: June close to the following March close)."
     }

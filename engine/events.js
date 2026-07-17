@@ -729,6 +729,9 @@ function main() {
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly',
+        // The horizon the THESIS is stated over (9 months here) — the denominator
+        // the live monitor measures progress against. Distinct from the 1Y fan span.
+        thesisHorizonDays: ev.thesisHorizonDays || null,
         rationale: ev.rationale, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the June month-end close (event-study convention).',
         ...res
@@ -755,6 +758,10 @@ function main() {
     out.events.push({
       id: ev.id, name: ev.name, kind: ev.kind,
       target: ev.target || 'SPY', rationale: ev.rationale, definition: ev.definition,
+      // The horizon the THESIS is stated over (e.g. a multi-week snap-back for a
+      // washout) — the denominator the live monitor measures progress against,
+      // NOT the 1Y fan span.
+      thesisHorizonDays: ev.thesisHorizonDays || null,
       entryNote: 'Forward return measured from the close of the trigger day (event-study convention).',
       ...res
     });
