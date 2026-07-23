@@ -10,7 +10,8 @@
         { "t": "EEM", "n": "Emerging Markets", "cls": "EM Equity" },
         { "t": "TLT", "n": "US 20Y+ Treasury", "cls": "Fixed Income" },
         { "t": "GLD", "n": "Gold", "cls": "Commodity" },
-        { "t": "SLV", "n": "Silver", "cls": "Commodity" }
+        { "t": "SLV", "n": "Silver", "cls": "Commodity" },
+        { "t": "LIT", "n": "Lithium & Battery Tech (Global X)", "cls": "Thematic Equity" }
       ]
     },
     "global_etf": {

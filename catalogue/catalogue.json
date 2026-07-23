@@ -31,6 +31,19 @@
       "definition": "Trigger on the session SLV's RSI(14) crosses below 30 while SLV closes below its 200-day SMA. Forward returns measured on SLV from the trigger close."
     },
     {
+      "id": "lit-oversold-reversion-downtrend",
+      "name": "LIT oversold washout below its 200-day SMA",
+      "kind": "oversold_reversion_in_downtrend",
+      "target": "LIT",
+      "rsiPeriod": 14,
+      "oversoldLevel": 30,
+      "smaPeriod": 200,
+      "clusterDays": 21,
+      "thesisHorizonDays": 63,
+      "rationale": "The same oversold-in-downtrend mean-reversion construct as the GLD and SLV cards, extended to LIT (Global X Lithium & Battery Tech ETF) — a high-beta thematic ETF that has spent years in a deep drawdown. Prompted by a SentimenTrader note on depressed lithium sentiment, but deliberately NOT their study: their signal is a proprietary Optix sentiment composite, and their headline was a cross-asset LIT-to-gold/stocks curiosity that the author himself concedes has no mechanism and frames as weight-of-evidence rather than a buy signal. We test only the reproducible, mechanism-having piece — does a washed-out thematic ETF partially mean-revert — on our own price data, and drop the cross-asset angle entirely. Counter-trend by design; single-sector concentration and LIT's short history (2010 inception, ~10y of daily data here) make this the thinnest-sample washout on the book. Forward returns on LIT; significance from our random-entry Monte Carlo; thin-sample caveat applies. OUR RESULT: on this data the LIT washout does NOT bounce — it is a value trap. Short-term continuation is significantly negative (1-to-2-week medians around -2 to -3%, p < 0.05) and the 1-year median is about -8% at a 25% hit rate. Retained as the honest counter-example — the precious-metals washout mechanism does not generalise to a single-theme ETF in a structural downtrend, and it is a live reminder that 'oversold' is not 'cheap'.",
+      "definition": "Trigger on the session LIT's RSI(14) crosses below 30 while LIT closes below its 200-day SMA. Forward returns measured on LIT from the trigger close."
+    },
+    {
       "id": "spx-strong-q2-9m-forward",
       "name": "S&P 500 strong 2nd quarter → 9-month forward",
       "kind": "seasonal_strong_quarter",
