@@ -225,6 +225,56 @@ function detectBreadthCross(spy, ev, universe) {
   return { dates, ac, triggers, indicator: breadth.map(b => b == null ? null : +(b * 100).toFixed(1)), indicatorName: '% > 200d SMA' };
 }
 
+// Breadth RECOVERY out of a drawdown: the share of a basket back above its own
+// `maPeriod`-day SMA crosses UP through `level` while the target still sits
+// `drawdownPct` or more below its trailing `lookback` high. A
+// participation-thrust-out-of-a-hole signal (the SentimenTrader Hang Seng lead,
+// rebuilt on OUR data as SEGMENT-level China-ETF breadth — NOT Hang Seng
+// constituents, which we do not hold). Causal throughout; forward returns on the
+// target.
+function detectBreadthRecoveryFromDrawdown(target, ev, universe) {
+  const maPeriod = ev.maPeriod || 50;
+  const level = ev.level != null ? ev.level : 0.55;
+  const drawdownPct = ev.drawdownPct != null ? ev.drawdownPct : 0.18;
+  const lookback = ev.lookback || 252;
+  const minNames = ev.minNames || 6;
+
+  // Per-ticker: date -> (close > its own trailing maPeriod SMA), causal.
+  const aboveByTk = {};
+  for (const tk of universe) {
+    let h; try { h = loadTicker(tk); } catch (e) { continue; }
+    const a = h.daily.map(b => b.ac);
+    const s = sma(a, maPeriod);
+    const m = {};
+    for (let i = 0; i < h.daily.length; i++) if (s[i] != null) m[h.daily[i].d] = a[i] > s[i];
+    aboveByTk[tk] = m;
+  }
+
+  const dates = target.daily.map(b => b.d);
+  const ac = target.daily.map(b => b.ac);
+
+  // Breadth on the target's axis (only where >= minNames basket members trade).
+  const breadth = new Array(dates.length).fill(null);
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    let above = 0, total = 0;
+    for (const tk of universe) { const m = aboveByTk[tk]; if (m && d in m) { total++; if (m[d]) above++; } }
+    if (total >= minNames) breadth[i] = above / total;
+  }
+
+  // Target drawdown: at least drawdownPct below its trailing lookback-day high.
+  const trailMax = rollingMax(ac, lookback);
+  const inHole = ac.map((v, i) => trailMax[i] == null ? false : v <= trailMax[i] * (1 - drawdownPct));
+
+  // Trigger: breadth crosses UP through level while the target is in the hole.
+  const triggers = [];
+  for (let i = 1; i < breadth.length; i++) {
+    if (breadth[i] == null || breadth[i - 1] == null) continue;
+    if (breadth[i] >= level && breadth[i - 1] < level && inHole[i]) triggers.push(i);
+  }
+  return { dates, ac, triggers, indicator: breadth.map(b => b == null ? null : +(b * 100).toFixed(1)), indicatorName: `% > ${maPeriod}d SMA (China basket)` };
+}
+
 // New-highs-into-thinning-breadth divergence. The target makes repeated 1-year
 // highs while cross-asset participation (% of the universe above its own 200-day
 // SMA) has rolled over from its own trailing-1-year peak. The trigger fires on
@@ -758,6 +808,8 @@ function main() {
       series = detectRsiOverboughtToMid(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_cross') {
       series = detectBreadthCross(spy, ev, universe);
+    } else if (ev.kind === 'breadth_recovery_from_drawdown') {
+      series = detectBreadthRecoveryFromDrawdown(loadTicker(ev.target), ev, resolveUniverse(ev.breadthUniverse || cat.defaultUniverse));
     } else if (ev.kind === 'newhigh_breadth_divergence') {
       series = detectNewHighBreadthDivergence(loadTicker(ev.target), ev, universe);
     } else if (ev.kind === 'oversold_reversion_in_downtrend') {

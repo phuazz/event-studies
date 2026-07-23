@@ -14,6 +14,22 @@
         { "t": "LIT", "n": "Lithium & Battery Tech (Global X)", "cls": "Thematic Equity" }
       ]
     },
+    "china": {
+      "_doc": "US-listed China/HK ETFs spanning A-shares, offshore large-cap and internet/tech — the breadth basket for the China recovery study. Yahoo-fetched. A SEGMENT-level proxy for Chinese-equity participation, NOT Hang Seng constituents (we hold no HK equities). Coarse (~11 items) and USD-denominated; honest caveats carried on the card.",
+      "tickers": [
+        { "t": "FXI", "n": "China large-cap (HK)", "cls": "China ETF" },
+        { "t": "MCHI", "n": "MSCI China", "cls": "China ETF" },
+        { "t": "GXC", "n": "China broad", "cls": "China ETF" },
+        { "t": "EWH", "n": "Hong Kong", "cls": "China ETF" },
+        { "t": "ASHR", "n": "China A-shares (CSI 300)", "cls": "China ETF" },
+        { "t": "CNYA", "n": "China A-shares (MSCI)", "cls": "China ETF" },
+        { "t": "KBA", "n": "China A-shares (KraneShares)", "cls": "China ETF" },
+        { "t": "KWEB", "n": "China internet", "cls": "China ETF" },
+        { "t": "CQQQ", "n": "China technology", "cls": "China ETF" },
+        { "t": "CXSE", "n": "China ex-state-owned", "cls": "China ETF" },
+        { "t": "PGJ", "n": "China (US-listed)", "cls": "China ETF" }
+      ]
+    },
     "global_etf": {
       "_doc": "Single-country / regional equity ETFs for SentimenTrader-style cross-sectional breadth studies. NORGATE-FED and survivorship-free: delisted ETFs are included via the delisted database (e.g. RSX-202212, Russia, delisted 2022) and membership is point-in-time (a name counts only on sessions it actually traded). Benchmark/target: SPY. NOT used by the Yahoo Node pipeline — consumed by the Python breadth engine (scripts/etf_breadth_engine.py). History from 1996 (iShares EWx series).",
       "_source": "norgate",

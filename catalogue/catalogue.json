@@ -56,6 +56,22 @@
       "thesisHorizonDays": 189,
       "rationale": "A strong second quarter — a price gain in each of April, May and June, and/or a quarterly price gain of 10 per cent or more from the end of March to the end of June — is a momentum-and-participation regime signal. Broad, sustained strength into mid-year has historically been followed by above-base-rate S&P 500 price returns over the following nine months (June close to the following March close). This is not a replication of the SentimenTrader record, which is a proprietary lead re-tested here on our own data; the card reports OUR numbers only. The honest edge is the excess over the unconditional nine-month base rate — the S&P 500 is already positive over roughly four in five nine-month windows — not the raw win rate, and signals cluster in secular bull markets, so the effective sample is thinner than the raw count. A long-only seasonal context signal, judged on our random-entry Monte Carlo, with a thin-sample caveat carried on the card.",
       "definition": "At each June month-end, flag a 'strong' 2nd quarter when the S&P 500 posts a price gain in each of April, May and June, and/or gains 10% or more from the end of March to the end of June. Forward returns measured on the S&P 500 price index from the June close over 3/6/9/12 months (9M is the headline: June close to the following March close)."
+    },
+    {
+      "id": "china-etf-breadth-recovery",
+      "name": "China ETF breadth recovery from a drawdown",
+      "kind": "breadth_recovery_from_drawdown",
+      "target": "FXI",
+      "breadthUniverse": "china",
+      "maPeriod": 50,
+      "level": 0.55,
+      "drawdownPct": 0.18,
+      "lookback": 252,
+      "minNames": 6,
+      "clusterDays": 21,
+      "thesisHorizonDays": 84,
+      "rationale": "Prompted by a SentimenTrader note on a Hang Seng breadth thrust, rebuilt on our OWN data — and deliberately NOT their signal. Theirs is the percentage of Hang Seng CONSTITUENTS above their moving averages; we hold no Hong Kong equities (Norgate carries none), so this is a PROXY: segment-level breadth across a basket of ~11 US-listed China/HK ETFs spanning A-shares, offshore large-cap, and internet/tech. Mechanism: a broad participation recovery — the share of the China complex back above its 50-day average crossing up through 55% while the market is still 18% or more below its one-year high — signals that a washed-out market is being bought across segments, which has historically tended to precede continuation rather than a fresh leg down. Three honest caveats carried on the card: (1) ETF-segment breadth is COARSER than constituent breadth (~11 items, not dozens of names); (2) the basket is US-listed and therefore USD-denominated, so the currency layer sits on top; (3) the ~10-year daily window here yields only a handful of independent episodes — a thin sample. Target: FXI (HK large-cap China, the closest liquid proxy to the Hang Seng). Significance from our random-entry Monte Carlo. OUR RESULT: on this thin proxy the recovery produces only a mild short-term pop (1-week to 1-month medians around +1 to +2%) that fades to a NEGATIVE edge at 2-to-3 months, and is not statistically significant at any horizon — no sign of the strong medium-term continuation the lead described, and consistent with the tendency of Chinese equities to roll over quickly after participation spikes. A deeper ADR-level breadth basket, survivorship-clean via Norgate, is a possible future upgrade that might sharpen what this coarse 11-ETF basket cannot resolve.",
+      "definition": "Trigger when the percentage of a ~11-ETF China basket (A-shares, offshore large-cap, internet/tech) trading above their own 50-day SMA crosses up through 55%, while FXI is at least 18% below its trailing 252-day high. Forward returns measured on FXI from the trigger close."
     }
   ]
 }
