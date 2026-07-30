@@ -275,6 +275,46 @@ function detectBreadthRecoveryFromDrawdown(target, ev, universe) {
   return { dates, ac, triggers, indicator: breadth.map(b => b == null ? null : +(b * 100).toFixed(1)), indicatorName: `% > ${maPeriod}d SMA (China basket)` };
 }
 
+// Breadth PANIC extreme: the share of a basket printing a fresh `lowLookback`-day
+// low crosses UP through `level` — a capitulation / washout-of-participation
+// reading (the SentimenTrader KOSPI panic-breadth lead, rebuilt on OUR data over
+// EWY's CURRENT holdings; survivorship-caveated). Causal throughout; forward
+// returns on the target. De-clustering to "first in six months" is done by
+// clusterDays in analyseEvent.
+function detectBreadthPanicExtreme(target, ev, universe) {
+  const lowLookback = ev.lowLookback || 60;   // ~12 weeks
+  const level = ev.level != null ? ev.level : 0.80;
+  const minNames = ev.minNames || 30;
+
+  // Per-ticker: date -> (close is a fresh lowLookback-day low), causal.
+  const lowByTk = {};
+  for (const tk of universe) {
+    let h; try { h = loadTicker(tk); } catch (e) { continue; }
+    const a = h.daily.map(b => b.ac);
+    const rmin = rollingMin(a, lowLookback);
+    const m = {};
+    for (let i = 0; i < h.daily.length; i++) if (rmin[i] != null) m[h.daily[i].d] = a[i] <= rmin[i] + 1e-9;
+    lowByTk[tk] = m;
+  }
+
+  const dates = target.daily.map(b => b.d);
+  const ac = target.daily.map(b => b.ac);
+  const breadth = new Array(dates.length).fill(null);
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    let low = 0, total = 0;
+    for (const tk of universe) { const m = lowByTk[tk]; if (m && d in m) { total++; if (m[d]) low++; } }
+    if (total >= minNames) breadth[i] = low / total;
+  }
+
+  const triggers = [];
+  for (let i = 1; i < breadth.length; i++) {
+    if (breadth[i] == null || breadth[i - 1] == null) continue;
+    if (breadth[i] >= level && breadth[i - 1] < level) triggers.push(i);
+  }
+  return { dates, ac, triggers, indicator: breadth.map(b => b == null ? null : +(b * 100).toFixed(1)), indicatorName: `% at ${lowLookback}d low (KOSPI basket)` };
+}
+
 // New-highs-into-thinning-breadth divergence. The target makes repeated 1-year
 // highs while cross-asset participation (% of the universe above its own 200-day
 // SMA) has rolled over from its own trailing-1-year peak. The trigger fires on
@@ -810,6 +850,8 @@ function main() {
       series = detectBreadthCross(spy, ev, universe);
     } else if (ev.kind === 'breadth_recovery_from_drawdown') {
       series = detectBreadthRecoveryFromDrawdown(loadTicker(ev.target), ev, resolveUniverse(ev.breadthUniverse || cat.defaultUniverse));
+    } else if (ev.kind === 'breadth_panic_extreme') {
+      series = detectBreadthPanicExtreme(loadTicker(ev.target), ev, resolveUniverse(ev.breadthUniverse || cat.defaultUniverse));
     } else if (ev.kind === 'newhigh_breadth_divergence') {
       series = detectNewHighBreadthDivergence(loadTicker(ev.target), ev, universe);
     } else if (ev.kind === 'oversold_reversion_in_downtrend') {
