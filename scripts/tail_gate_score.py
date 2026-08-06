@@ -103,6 +103,11 @@ def score_stratum(st: dict, credit: Credit, rng: np.random.Generator) -> dict:
         credited[cell] = np.array(vals)
         credit_bps[cell] = float(np.mean(bps))
 
+    pre_shy_e1a = sum(
+        1 for e in eps
+        if e["cells"]["E1a"]["k"] < H
+        and pd.Timestamp(e["cells"]["E1a"]["exitDate"]) < credit.start)
+
     e0, e1a = credited["E0"], credited["E1a"]
     imp = e1a - e0
     dd = {cell: min(e["cells"][cell]["heldDD"] for e in eps)
@@ -176,6 +181,7 @@ def score_stratum(st: dict, credit: Credit, rng: np.random.Generator) -> dict:
         "g5_p95_placebo_delta": round(g5_p95, 6),
         "g5_p50_placebo_delta": round(float(np.quantile(pl_deltas, 0.50)), 6),
         "n_early_exits_E1a": len(early),
+        "pre_shy_zero_credit_exits_E1a": pre_shy_e1a,
         "bars": bars, "verdict": verdict,
         "report_only": report_only,
     }
@@ -210,9 +216,12 @@ def main() -> int:
         for b, ok in res["bars"].items():
             if not ok:
                 print(f"    fail {b}")
-    out["pre_shy_exits_zero_credited"] = credit.pre_shy_exits
+    # the class-level counter also counts placebo-draw calls; the honest
+    # per-trial number is pre_shy_zero_credit_exits_E1a inside each trial
     OUT.write_text(json.dumps(out, indent=1), encoding="utf-8")
-    print(f"pre-SHY exits credited at 0% (declared): {credit.pre_shy_exits}")
+    for tid, t in out["trials"].items():
+        print(f"{tid} pre-SHY E1a exits credited at 0% (declared): "
+              f"{t['pre_shy_zero_credit_exits_E1a']}")
     print(f"wrote {OUT}")
     return 0
 
