@@ -1,9 +1,10 @@
 # Pre-registration — tail-scored gate for tail-truncating exit rules (E1a successor)
 
-**STATUS: PROPOSED 2026-08-06 (Thursday) — committed to timestamp the
-registration BEFORE any cell exists. Freezes on ZH sign-off; no cell may
-run before sign-off. Amendments after results exist are prohibited; a
-blocked path files a STOP, not an edit.**
+**STATUS: FROZEN — countersigned "as proposed" by ZH 2026-08-06
+(Thursday), all five sign-off asks accepted without amendment. Registered
+2026-08-06 and committed (1c57f34) before any cell existed; cells may now
+run. Amendments after results exist are prohibited; a blocked path files a
+STOP, not an edit.**
 
 Successor to `studies/2026-07-17_exit-rule_preregistration.md` (b7dd2cd)
 and its results (`studies/2026-07-17_exit-rule_results.md`), which closed
