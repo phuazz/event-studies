@@ -86,6 +86,42 @@
       "thesisHorizonDays": 84,
       "rationale": "SURVIVORSHIP CAVEAT, FRONT AND CENTRE: this breadth is computed over EWY's CURRENT ~55 large/mid KOSPI holdings, NOT point-in-time membership — names that delisted or dropped out are absent, which biases historical breadth-health upward and understates past panics. Treat the record as indicative, not survivorship-clean; a clean version needs a paid international-constituents feed or a forward daily-capture database. Rebuilt on our OWN data from a SentimenTrader KOSPI lead (Korean constituent breadth we could not otherwise compute). Mechanism: when 80% or more of the basket simultaneously prints a fresh 12-week low (first such spike in six months), the selloff has reached a fear/capitulation extreme, and such extremes have historically tended to precede a bounce — a 'prepare to buy', NOT a 'buy': acting immediately is catching a falling knife, so wait for price confirmation before committing capital. Target EWY (the USD-tradable Korea proxy, ~80-90% correlated to the KOSPI). Rare by construction, so the sample is minuscule — both the vendor and we flag it as too small to draw firm conclusions. Significance from our random-entry Monte Carlo. OUR RESULT: on full 2005+ history the extreme has fired only TWICE — the 2008 GFC bottom (24 Oct 2008) and the COVID crash (13 Mar 2020) — both generational V-bottoms after which EWY rose roughly 100% over the following year. n=2 is an anecdote, not evidence (the low Monte-Carlo p-values are not meaningful at this sample), so the credibility gate correctly marks this IGNORE. As of 2026-07-30 the reading is about 18% at 12-week lows, far below the 80% trigger: the KOSPI has cratered but NOT capitulated, matching the source lead.",
       "definition": "Trigger when the percentage of the KOSPI basket (EWY's current large/mid holdings) printing a fresh 60-day (~12-week) low crosses up through 80%, de-clustered to the first such spike in any 126-session (~6-month) window. Forward returns measured on EWY from the trigger close."
+    },
+    {
+      "id": "copper-gold-extreme-low-copper",
+      "name": "Copper/Gold ratio extreme-low → copper",
+      "kind": "ratio_extreme_low",
+      "ratioTicker": "CUGC",
+      "ratioName": "Copper/Gold ratio",
+      "target": "CPER",
+      "cadence": "monthly",
+      "pctile": 0.12,
+      "minHistoryMonths": 60,
+      "clusterMonths": 12,
+      "forwardMonths": [3, 6, 12],
+      "regimeSmaMonths": 10,
+      "clusterDays": 0,
+      "thesisHorizonDays": 252,
+      "rationale": "Prompted by a SentimenTrader copper/gold lead, rebuilt on OUR data with OUR threshold. Mechanism: the copper/gold ratio is a classic growth-vs-safe-haven gauge — copper is an industrial-demand bellwether, gold a haven — so an extreme LOW (copper cheap relative to gold) marks maximal pessimism on global growth, which has historically mean-reverted with copper rallying. We use Norgate's #CUGC ratio (1993+) and trigger when it falls into the bottom 12% of its FULL history (a descriptive, disclosed in-sample threshold — never the vendor's fixed 0.16, which is units-dependent; an expanding/causal threshold DRIFTS on this bimodal ratio and manufactures spurious crossings, so it was rejected), de-clustered to the first extreme in 12 months. Target: CPER (the clean investable copper ETF; COPX copper-miners would be a higher-beta alternative). HONEST CAVEATS: (1) CPER only starts 2011, so the sample is TINY — the 2008 GFC extreme is excluded and only about three completed episodes remain; (2) like the LIT-Optix re-test, this is really a GENERALISED growth-pessimism-washout signal — the extremes are macro bottoms (2016, 2020, 2024), so a clean record is a handful of once-a-cycle buys, not a dense edge; (3) copper-futures roll is avoided by using CPER, though CPER's own roll cost applies. Significance from our random-entry Monte Carlo. The term-structure leg of the source note (HG1/HG6 futures curve) is data-gated and omitted. OUR RESULT: on CPER (2011+) the signal fires three times (2016, 2019, 2024) — copper's 12-month return was +18.5% median, 3/3 positive, versus a +0.4% base, but with an interim ~6-month soft patch (the note's '5-7% drawdown first'); n=3 is an anecdote and the credibility gate IGNOREs it.",
+      "definition": "Trigger when the copper/gold ratio (Norgate #CUGC) falls into the bottom 12% of its full history, the first such extreme in 12 months. Forward returns measured on CPER (copper) from the trigger month-end close over 3/6/12 months (12M is the headline)."
+    },
+    {
+      "id": "copper-gold-extreme-low-spx",
+      "name": "Copper/Gold ratio extreme-low → S&P 500",
+      "kind": "ratio_extreme_low",
+      "ratioTicker": "CUGC",
+      "ratioName": "Copper/Gold ratio",
+      "target": "GSPC",
+      "cadence": "monthly",
+      "pctile": 0.12,
+      "minHistoryMonths": 60,
+      "clusterMonths": 12,
+      "forwardMonths": [3, 6, 12],
+      "regimeSmaMonths": 10,
+      "clusterDays": 0,
+      "thesisHorizonDays": 252,
+      "rationale": "The macro companion to the copper card, on the SAME trigger: when the copper/gold ratio hits an extreme low (bottom 12% of its full history, first in 12 months — our own percentile threshold, not the vendor's 0.16), what happens to the S&P 500? Mechanism: an extreme-low copper/gold reflects a global-growth fear washout, and such risk-off extremes have historically been contrarian-bullish for equities as the pessimism mean-reverts. Rebuilt on OUR data — Norgate #CUGC ratio (1993+) as the trigger, S&P 500 price index (Norgate $SPX) as the target, so this card sees EVERY trigger since 1993 (the larger, more honest sample of the two copper cards). CAVEAT: the extremes still cluster at a handful of macro bottoms (GFC, 2016, COVID, 2024), so treat the win rate as a small number of generational risk-off buys, not a dense timing edge — the same generalised-washout character as the copper card and the LIT-Optix re-test. Significance from our random-entry Monte Carlo. OUR RESULT: the ratio hit this extreme four times since 1993 (2008, 2016, 2019, 2024) — the S&P 500's 12-month return was +21.0% median, 4/4 positive, versus a +10.9% base (a ~+10pp edge); n=4 keeps it below significance (p=0.18), and the win rate is four generational risk-off buys, not a dense timing edge.",
+      "definition": "Trigger when the copper/gold ratio (Norgate #CUGC) falls into the bottom 12% of its full history, the first such extreme in 12 months. Forward returns measured on the S&P 500 price index from the trigger month-end close over 3/6/12 months."
     }
   ]
 }

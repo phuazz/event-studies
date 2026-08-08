@@ -342,7 +342,7 @@ function liveStatus(ev){
   let date,k,mtm,lo=0,hi=0;
   if(ev.fanLatest){
     const path=ev.fanLatest.path||[]; if(path.length<2) return null;
-    date=ev.fanLatest.date; k=path[path.length-1].k; mtm=path[path.length-1].v;
+    date=ev.fanLatest.date; k=ev.fanLatest.elapsed!=null?ev.fanLatest.elapsed:path[path.length-1].k; mtm=path[path.length-1].v;
     for(const p of path){ if(p.k===0) continue; if(p.v<lo)lo=p.v; if(p.v>hi)hi=p.v; }
   }else{
     const ps=ev.priceSeries||[], eps=ev.episodes||[]; if(!eps.length) return null;

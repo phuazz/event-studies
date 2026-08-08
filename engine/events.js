@@ -769,7 +769,7 @@ function analyseSeasonalStrongQuarter(target, ev) {
     if (aL != null) {
       const path = [];
       for (let k = 0; aL + k < dac.length && k <= 252; k++) path.push({ k, v: rnd4(dac[aL + k] / dac[aL] - 1) });
-      fanLatest = { date: dates[lastSig.idx], path };
+      fanLatest = { date: dates[lastSig.idx], elapsed: dac.length - 1 - aL, path };
     }
   }
 
@@ -785,6 +785,126 @@ function analyseSeasonalStrongQuarter(target, ev) {
     episodes: episodeRows,
     priceSeries,
     fan, fanPrior, fanLatest
+  };
+}
+
+// Ratio-extreme (monthly): a price RATIO (e.g. copper/gold) falls to a LOW
+// extreme -> forward returns on a TARGET instrument (copper for the bull-copper
+// card, the S&P 500 for the macro card). The SentimenTrader copper/gold lead,
+// rebuilt on OUR data with OUR causal percentile threshold (NEVER their 0.16).
+// Triggers are computed on the FULL ratio history so the "extreme" is calibrated
+// against all of it; episodes are the triggers the target can measure forward
+// from. Forward returns on the target's monthly bars; range-of-outcomes fan on
+// daily bars, anchored at each trigger month.
+function analyseRatioExtreme(ratioSeries, target, ev) {
+  if (!target.monthly || !target.monthly.length) throw new Error(`${ev.target}: no monthly series`);
+  if (!ratioSeries.monthly || !ratioSeries.monthly.length) throw new Error(`${ev.ratioTicker}: no monthly ratio series`);
+
+  const forwardMonths = ev.forwardMonths || [3, 6, 12];
+  const labels = forwardMonths.map(h => `${h}M`);
+  const pctile = ev.pctile != null ? ev.pctile : 0.12;
+  const minHist = ev.minHistoryMonths || 60;
+  const clusterMonths = ev.clusterMonths || 12;
+  const smaMonths = ev.regimeSmaMonths || 10;
+
+  const bars = target.monthly;
+  const dates = bars.map(b => b.d);
+  const ac = bars.map(b => b.ac);
+  const N = ac.length;
+  const smaMonthly = sma(ac, smaMonths);
+  const tIdxByYm = {}; for (let i = 0; i < N; i++) tIdxByYm[dates[i].slice(0, 7)] = i;
+  const rMap = {}; for (const b of ratioSeries.monthly) rMap[b.d.slice(0, 7)] = b.ac;
+
+  // Low-extreme threshold = the `pctile` quantile of the ratio's FULL history.
+  // DESCRIPTIVE, disclosed in-sample: it defines "an extreme low" against all of
+  // the history, matching the vendor's fixed-level framing and identifying the
+  // actual historical troughs. (An expanding/causal threshold DRIFTS on this
+  // bimodal ratio — copper cheap in the 1990s, peaking 2011 — manufacturing
+  // spurious crossings, so it is rejected here.) Triggers cross INTO the extreme,
+  // de-clustered to the first in `clusterMonths` (extremes bunch at one bottom).
+  const rval = ratioSeries.monthly.map(b => b.ac);
+  const rym = ratioSeries.monthly.map(b => b.d.slice(0, 7));
+  const thrLevel = rval.length >= minHist ? quantile(rval, pctile) : null;
+  const below = i => thrLevel != null && i >= minHist && rval[i] <= thrLevel;
+  const rawTrig = [];
+  for (let i = 1; i < rval.length; i++) if (below(i) && !below(i - 1)) rawTrig.push(i);
+  const rSignals = [];
+  for (const i of rawTrig) if (!rSignals.length || i - rSignals[rSignals.length - 1] > clusterMonths) rSignals.push(i);
+
+  // Episodes: trigger months the target can measure forward from.
+  const signals = [];
+  for (const ri of rSignals) { const t = tIdxByYm[rym[ri]]; if (t != null) signals.push({ tIdx: t, ym: rym[ri], ratio: rval[ri] }); }
+  const episodes = signals.map(s => s.tIdx);
+
+  const baseFwd = {};
+  for (const h of forwardMonths) { const arr = []; for (let i = 0; i + h < N; i++) arr.push(ac[i + h] / ac[i] - 1); baseFwd[h] = arr; }
+
+  const byHorizon = forwardMonths.map((h, hi) => {
+    const fwd = [], mfe = [], mae = [];
+    for (const idx of episodes) {
+      if (idx + h >= N) continue;
+      fwd.push(ac[idx + h] / ac[idx] - 1);
+      let hiR = -Infinity, loR = Infinity;
+      for (let k = 1; k <= h; k++) { const r = ac[idx + k] / ac[idx] - 1; if (r > hiR) hiR = r; if (r < loR) loR = r; }
+      mfe.push(hiR); mae.push(loR);
+    }
+    const n = fwd.length, base = baseFwd[h], condMedian = median(fwd);
+    let ge = 0; const maxStart = N - h;
+    if (n > 0 && maxStart > 0) for (let b = 0; b < BOOT_ITERS; b++) { const draws = []; for (let j = 0; j < n; j++) draws.push(base[randInt(maxStart)]); if (median(draws) >= condMedian) ge++; }
+    const pTwoSided = n > 0 ? 2 * Math.min(ge, BOOT_ITERS - ge) / BOOT_ITERS : NaN;
+    const percentile = n > 0 ? 1 - ge / BOOT_ITERS : NaN;
+    let ciLo = NaN, ciHi = NaN;
+    if (n > 1) { const meds = []; for (let b = 0; b < BOOT_ITERS; b++) { const s = []; for (let j = 0; j < n; j++) s.push(fwd[randInt(n)]); meds.push(median(s)); } ciLo = quantile(meds, 0.05); ciHi = quantile(meds, 0.95); }
+    return { h, label: labels[hi], n, mean: mean(fwd), median: condMedian, hit: hitRate(fwd), mfeMedian: median(mfe), maeMedian: median(mae), baseMean: mean(base), baseMedian: median(base), baseHit: hitRate(base), edgeMedian: condMedian - median(base), ciLo, ciHi, pValue: pTwoSided, percentile };
+  });
+
+  const episodeRows = signals.map(s => {
+    const idx = s.tIdx, fwd = {};
+    for (const h of forwardMonths) fwd[h] = idx + h < N ? +((ac[idx + h] / ac[idx] - 1) * 100).toFixed(2) : null;
+    const regime = smaMonthly[idx] == null ? null : (ac[idx] > smaMonthly[idx] ? 'on' : 'off');
+    return { date: dates[idx], idx, regime, fwd };
+  });
+  const onCount = episodeRows.filter(e => e.regime === 'on').length;
+  const offCount = episodeRows.filter(e => e.regime === 'off').length;
+
+  const priceSeries = bars.map((b, i) => ({ d: b.d, ac: +ac[i].toFixed(2), ind: rMap[b.d.slice(0, 7)] == null ? null : +rMap[b.d.slice(0, 7)].toFixed(3) }));
+
+  // ---- Range-of-outcomes fan on DAILY target bars, anchored at each trigger month ----
+  let fan = null, fanPrior = null, fanLatest = null;
+  const daily = target.daily || [];
+  if (daily.length > 60) {
+    const dac = daily.map(b => b.ac);
+    const monthAnchor = {}; for (let i = 0; i < daily.length; i++) monthAnchor[daily[i].d.slice(0, 7)] = i; // sorted -> last daily bar of month
+    const anchors = signals.map(s => monthAnchor[s.ym]).filter(a => a != null);
+    const rnd4 = x => +x.toFixed(4);
+    const mkFan = (anchorList) => {
+      const out = [{ k: 0, n: anchorList.length, p10: 0, p25: 0, p50: 0, p75: 0, p90: 0, mn: 0, mx: 0, ddMed: 0, ddBad: 0 }];
+      for (let k = 1; k <= 252; k++) {
+        const rets = [], dds = [];
+        for (const a of anchorList) {
+          if (a + k >= dac.length) continue;
+          const b0 = dac[a]; rets.push(dac[a + k] / b0 - 1);
+          let lo = 0; for (let j = 1; j <= k; j++) { const r = dac[a + j] / b0 - 1; if (r < lo) lo = r; } dds.push(lo);
+        }
+        if (rets.length < 3) break;
+        out.push({ k, n: rets.length, p10: rnd4(quantile(rets, 0.1)), p25: rnd4(quantile(rets, 0.25)), p50: rnd4(quantile(rets, 0.5)), p75: rnd4(quantile(rets, 0.75)), p90: rnd4(quantile(rets, 0.9)), mn: rnd4(Math.min(...rets)), mx: rnd4(Math.max(...rets)), ddMed: rnd4(quantile(dds, 0.5)), ddBad: rnd4(quantile(dds, 0.1)) });
+      }
+      return out;
+    };
+    fan = mkFan(anchors);
+    fanPrior = anchors.length > 1 ? mkFan(anchors.slice(0, -1)) : null;
+    const lastSig = signals[signals.length - 1];
+    const aL = lastSig ? monthAnchor[lastSig.ym] : null;
+    if (aL != null) { const path = []; for (let k = 0; aL + k < dac.length && k <= 252; k++) path.push({ k, v: rnd4(dac[aL + k] / dac[aL] - 1) }); fanLatest = { date: dates[lastSig.tIdx], elapsed: dac.length - 1 - aL, path }; }
+  }
+
+  return {
+    nTriggers: rSignals.length, nEpisodes: episodes.length, clusterDays: 0,
+    firstDate: episodes.length ? dates[episodes[0]] : null,
+    lastDate: episodes.length ? dates[episodes[episodes.length - 1]] : null,
+    regimeSplit: { on: onCount, off: offCount, untagged: episodeRows.length - onCount - offCount },
+    indicatorName: ev.ratioName || 'ratio',
+    byHorizon, episodes: episodeRows, priceSeries, fan, fanPrior, fanLatest
   };
 }
 
@@ -837,6 +957,19 @@ function main() {
         thesisHorizonDays: ev.thesisHorizonDays || null,
         rationale: ev.rationale, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the June month-end close (event-study convention).',
+        ...res
+      });
+      console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
+      continue;
+    }
+
+    if (ev.kind === 'ratio_extreme_low') {
+      const res = analyseRatioExtreme(loadTicker(ev.ratioTicker), loadTicker(ev.target), ev);
+      out.events.push({
+        id: ev.id, name: ev.name, kind: ev.kind,
+        target: ev.target, cadence: 'monthly',
+        rationale: ev.rationale, definition: ev.definition,
+        entryNote: 'Forward returns measured on the target from the trigger month-end close (event-study convention).',
         ...res
       });
       console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
