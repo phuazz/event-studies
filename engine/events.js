@@ -898,13 +898,38 @@ function analyseRatioExtreme(ratioSeries, target, ev) {
     if (aL != null) { const path = []; for (let k = 0; aL + k < dac.length && k <= 252; k++) path.push({ k, v: rnd4(dac[aL + k] / dac[aL] - 1) }); fanLatest = { date: dates[lastSig.tIdx], elapsed: dac.length - 1 - aL, path }; }
   }
 
+  // ---- Current signal STATE (distinct from the episode list) ----
+  // Episodes mark ENTRY crosses; the ratio can be IN the extreme zone NOW on an
+  // old entry that already matured — invisible to the episode/live views. This
+  // surfaces the live condition and whether the mean-reversion bet is working.
+  let currentState = null;
+  if (thrLevel != null && rval.length) {
+    const li = rval.length - 1, latest = rval[li];
+    const inZone = latest <= thrLevel;
+    let mInZone = 0; for (let i = li; i >= 0 && rval[i] <= thrLevel; i--) mInZone++;
+    const pctileNow = rval.filter(x => x <= latest).length / rval.length;
+    let entryDate = null, entryRatio = null, minSince = null, sinceEntryPct = null, entryMonthsAgo = null;
+    if (inZone) {
+      const entryIdx = li - mInZone + 1;
+      entryDate = ratioSeries.monthly[entryIdx].d; entryRatio = rval[entryIdx];
+      minSince = Math.min(...rval.slice(entryIdx)); sinceEntryPct = latest / entryRatio - 1; entryMonthsAgo = li - entryIdx;
+    }
+    currentState = {
+      inZone, latestDate: ratioSeries.monthly[li].d, latest: +latest.toFixed(3), threshold: +thrLevel.toFixed(3),
+      pctileNow: +pctileNow.toFixed(3), monthsInZone: mInZone, entryDate, entryMonthsAgo,
+      entryRatio: entryRatio == null ? null : +entryRatio.toFixed(3),
+      minSince: minSince == null ? null : +minSince.toFixed(3),
+      sinceEntryPct: sinceEntryPct == null ? null : +sinceEntryPct.toFixed(4)
+    };
+  }
+
   return {
     nTriggers: rSignals.length, nEpisodes: episodes.length, clusterDays: 0,
     firstDate: episodes.length ? dates[episodes[0]] : null,
     lastDate: episodes.length ? dates[episodes[episodes.length - 1]] : null,
     regimeSplit: { on: onCount, off: offCount, untagged: episodeRows.length - onCount - offCount },
     indicatorName: ev.ratioName || 'ratio',
-    byHorizon, episodes: episodeRows, priceSeries, fan, fanPrior, fanLatest
+    byHorizon, episodes: episodeRows, priceSeries, fan, fanPrior, fanLatest, currentState
   };
 }
 
