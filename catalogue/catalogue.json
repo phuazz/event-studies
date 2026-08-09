@@ -31,61 +31,23 @@
       "definition": "Trigger on the session SLV's RSI(14) crosses below 30 while SLV closes below its 200-day SMA. Forward returns measured on SLV from the trigger close."
     },
     {
-      "id": "lit-oversold-reversion-downtrend",
-      "name": "LIT oversold washout below its 200-day SMA",
-      "kind": "oversold_reversion_in_downtrend",
-      "target": "LIT",
-      "rsiPeriod": 14,
-      "oversoldLevel": 30,
-      "smaPeriod": 200,
-      "clusterDays": 21,
-      "thesisHorizonDays": 63,
-      "rationale": "The same oversold-in-downtrend mean-reversion construct as the GLD and SLV cards, extended to LIT (Global X Lithium & Battery Tech ETF) — a high-beta thematic ETF that has spent years in a deep drawdown. Prompted by a SentimenTrader note on depressed lithium sentiment, but deliberately NOT their study: their signal is a proprietary Optix sentiment composite, and their headline was a cross-asset LIT-to-gold/stocks curiosity that the author himself concedes has no mechanism and frames as weight-of-evidence rather than a buy signal. We test only the reproducible, mechanism-having piece — does a washed-out thematic ETF partially mean-revert — on our own price data, and drop the cross-asset angle entirely. Counter-trend by design; single-sector concentration and LIT's short history (2010 inception, ~10y of daily data here) make this the thinnest-sample washout on the book. Forward returns on LIT; significance from our random-entry Monte Carlo; thin-sample caveat applies. OUR RESULT: on this data the LIT washout does NOT bounce — it is a value trap. Short-term continuation is significantly negative (1-to-2-week medians around -2 to -3%, p < 0.05) and the 1-year median is about -8% at a 25% hit rate. Retained as the honest counter-example — the precious-metals washout mechanism does not generalise to a single-theme ETF in a structural downtrend, and it is a live reminder that 'oversold' is not 'cheap'.",
-      "definition": "Trigger on the session LIT's RSI(14) crosses below 30 while LIT closes below its 200-day SMA. Forward returns measured on LIT from the trigger close."
-    },
-    {
       "id": "spx-strong-q2-9m-forward",
       "name": "S&P 500 strong 2nd quarter → 9-month forward",
       "kind": "seasonal_strong_quarter",
       "target": "GSPC",
       "cadence": "monthly",
-      "q2GainThreshold": 0.10,
-      "forwardMonths": [3, 6, 9, 12],
+      "q2GainThreshold": 0.1,
+      "forwardMonths": [
+        3,
+        6,
+        9,
+        12
+      ],
       "regimeSmaMonths": 10,
       "clusterDays": 0,
       "thesisHorizonDays": 189,
       "rationale": "A strong second quarter — a price gain in each of April, May and June, and/or a quarterly price gain of 10 per cent or more from the end of March to the end of June — is a momentum-and-participation regime signal. Broad, sustained strength into mid-year has historically been followed by above-base-rate S&P 500 price returns over the following nine months (June close to the following March close). This is not a replication of the SentimenTrader record, which is a proprietary lead re-tested here on our own data; the card reports OUR numbers only. The honest edge is the excess over the unconditional nine-month base rate — the S&P 500 is already positive over roughly four in five nine-month windows — not the raw win rate, and signals cluster in secular bull markets, so the effective sample is thinner than the raw count. A long-only seasonal context signal, judged on our random-entry Monte Carlo, with a thin-sample caveat carried on the card.",
       "definition": "At each June month-end, flag a 'strong' 2nd quarter when the S&P 500 posts a price gain in each of April, May and June, and/or gains 10% or more from the end of March to the end of June. Forward returns measured on the S&P 500 price index from the June close over 3/6/9/12 months (9M is the headline: June close to the following March close)."
-    },
-    {
-      "id": "china-etf-breadth-recovery",
-      "name": "China ETF breadth recovery from a drawdown",
-      "kind": "breadth_recovery_from_drawdown",
-      "target": "FXI",
-      "breadthUniverse": "china",
-      "maPeriod": 50,
-      "level": 0.55,
-      "drawdownPct": 0.18,
-      "lookback": 252,
-      "minNames": 6,
-      "clusterDays": 21,
-      "thesisHorizonDays": 84,
-      "rationale": "Prompted by a SentimenTrader note on a Hang Seng breadth thrust, rebuilt on our OWN data — and deliberately NOT their signal. Theirs is the percentage of Hang Seng CONSTITUENTS above their moving averages; we hold no Hong Kong equities (Norgate carries none), so this is a PROXY: segment-level breadth across a basket of ~11 US-listed China/HK ETFs spanning A-shares, offshore large-cap, and internet/tech. Mechanism: a broad participation recovery — the share of the China complex back above its 50-day average crossing up through 55% while the market is still 18% or more below its one-year high — signals that a washed-out market is being bought across segments, which has historically tended to precede continuation rather than a fresh leg down. Three honest caveats carried on the card: (1) ETF-segment breadth is COARSER than constituent breadth (~11 items, not dozens of names); (2) the basket is US-listed and therefore USD-denominated, so the currency layer sits on top; (3) the ~10-year daily window here yields only a handful of independent episodes — a thin sample. Target: FXI (HK large-cap China, the closest liquid proxy to the Hang Seng). Significance from our random-entry Monte Carlo. OUR RESULT: on this thin proxy the recovery produces only a mild short-term pop (1-week to 1-month medians around +1 to +2%) that fades to a NEGATIVE edge at 2-to-3 months, and is not statistically significant at any horizon — no sign of the strong medium-term continuation the lead described, and consistent with the tendency of Chinese equities to roll over quickly after participation spikes. A deeper ADR-level breadth basket, survivorship-clean via Norgate, is a possible future upgrade that might sharpen what this coarse 11-ETF basket cannot resolve.",
-      "definition": "Trigger when the percentage of a ~11-ETF China basket (A-shares, offshore large-cap, internet/tech) trading above their own 50-day SMA crosses up through 55%, while FXI is at least 18% below its trailing 252-day high. Forward returns measured on FXI from the trigger close."
-    },
-    {
-      "id": "kospi-panic-breadth-extreme",
-      "name": "KOSPI panic breadth — % at 12-week lows spikes above 80%",
-      "kind": "breadth_panic_extreme",
-      "target": "EWY",
-      "breadthUniverse": "korea",
-      "lowLookback": 60,
-      "level": 0.80,
-      "minNames": 30,
-      "clusterDays": 126,
-      "thesisHorizonDays": 84,
-      "rationale": "SURVIVORSHIP CAVEAT, FRONT AND CENTRE: this breadth is computed over EWY's CURRENT ~55 large/mid KOSPI holdings, NOT point-in-time membership — names that delisted or dropped out are absent, which biases historical breadth-health upward and understates past panics. Treat the record as indicative, not survivorship-clean; a clean version needs a paid international-constituents feed or a forward daily-capture database. Rebuilt on our OWN data from a SentimenTrader KOSPI lead (Korean constituent breadth we could not otherwise compute). Mechanism: when 80% or more of the basket simultaneously prints a fresh 12-week low (first such spike in six months), the selloff has reached a fear/capitulation extreme, and such extremes have historically tended to precede a bounce — a 'prepare to buy', NOT a 'buy': acting immediately is catching a falling knife, so wait for price confirmation before committing capital. Target EWY (the USD-tradable Korea proxy, ~80-90% correlated to the KOSPI). Rare by construction, so the sample is minuscule — both the vendor and we flag it as too small to draw firm conclusions. Significance from our random-entry Monte Carlo. OUR RESULT: on full 2005+ history the extreme has fired only TWICE — the 2008 GFC bottom (24 Oct 2008) and the COVID crash (13 Mar 2020) — both generational V-bottoms after which EWY rose roughly 100% over the following year. n=2 is an anecdote, not evidence (the low Monte-Carlo p-values are not meaningful at this sample), so the credibility gate correctly marks this IGNORE. As of 2026-07-30 the reading is about 18% at 12-week lows, far below the 80% trigger: the KOSPI has cratered but NOT capitulated, matching the source lead.",
-      "definition": "Trigger when the percentage of the KOSPI basket (EWY's current large/mid holdings) printing a fresh 60-day (~12-week) low crosses up through 80%, de-clustered to the first such spike in any 126-session (~6-month) window. Forward returns measured on EWY from the trigger close."
     },
     {
       "id": "copper-gold-extreme-low-copper",
@@ -98,7 +60,11 @@
       "pctile": 0.12,
       "minHistoryMonths": 60,
       "clusterMonths": 12,
-      "forwardMonths": [3, 6, 12],
+      "forwardMonths": [
+        3,
+        6,
+        12
+      ],
       "regimeSmaMonths": 10,
       "clusterDays": 0,
       "thesisHorizonDays": 252,
@@ -116,7 +82,11 @@
       "pctile": 0.12,
       "minHistoryMonths": 60,
       "clusterMonths": 12,
-      "forwardMonths": [3, 6, 12],
+      "forwardMonths": [
+        3,
+        6,
+        12
+      ],
       "regimeSmaMonths": 10,
       "clusterDays": 0,
       "thesisHorizonDays": 252,
