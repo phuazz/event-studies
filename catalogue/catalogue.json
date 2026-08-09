@@ -48,50 +48,6 @@
       "thesisHorizonDays": 189,
       "rationale": "A strong second quarter — a price gain in each of April, May and June, and/or a quarterly price gain of 10 per cent or more from the end of March to the end of June — is a momentum-and-participation regime signal. Broad, sustained strength into mid-year has historically been followed by above-base-rate S&P 500 price returns over the following nine months (June close to the following March close). This is not a replication of the SentimenTrader record, which is a proprietary lead re-tested here on our own data; the card reports OUR numbers only. The honest edge is the excess over the unconditional nine-month base rate — the S&P 500 is already positive over roughly four in five nine-month windows — not the raw win rate, and signals cluster in secular bull markets, so the effective sample is thinner than the raw count. A long-only seasonal context signal, judged on our random-entry Monte Carlo, with a thin-sample caveat carried on the card.",
       "definition": "At each June month-end, flag a 'strong' 2nd quarter when the S&P 500 posts a price gain in each of April, May and June, and/or gains 10% or more from the end of March to the end of June. Forward returns measured on the S&P 500 price index from the June close over 3/6/9/12 months (9M is the headline: June close to the following March close)."
-    },
-    {
-      "id": "copper-gold-extreme-low-copper",
-      "name": "Copper/Gold ratio extreme-low → copper",
-      "kind": "ratio_extreme_low",
-      "ratioTicker": "CUGC",
-      "ratioName": "Copper/Gold ratio",
-      "target": "CPER",
-      "cadence": "monthly",
-      "pctile": 0.12,
-      "minHistoryMonths": 60,
-      "clusterMonths": 12,
-      "forwardMonths": [
-        3,
-        6,
-        12
-      ],
-      "regimeSmaMonths": 10,
-      "clusterDays": 0,
-      "thesisHorizonDays": 252,
-      "rationale": "Prompted by a SentimenTrader copper/gold lead, rebuilt on OUR data with OUR threshold. Mechanism: the copper/gold ratio is a classic growth-vs-safe-haven gauge — copper is an industrial-demand bellwether, gold a haven — so an extreme LOW (copper cheap relative to gold) marks maximal pessimism on global growth, which has historically mean-reverted with copper rallying. We use Norgate's #CUGC ratio (1993+) and trigger when it falls into the bottom 12% of its FULL history (a descriptive, disclosed in-sample threshold — never the vendor's fixed 0.16, which is units-dependent; an expanding/causal threshold DRIFTS on this bimodal ratio and manufactures spurious crossings, so it was rejected), de-clustered to the first extreme in 12 months. Target: CPER (the clean investable copper ETF; COPX copper-miners would be a higher-beta alternative). HONEST CAVEATS: (1) CPER only starts 2011, so the sample is TINY — the 2008 GFC extreme is excluded and only about three completed episodes remain; (2) like the LIT-Optix re-test, this is really a GENERALISED growth-pessimism-washout signal — the extremes are macro bottoms (2016, 2020, 2024), so a clean record is a handful of once-a-cycle buys, not a dense edge; (3) copper-futures roll is avoided by using CPER, though CPER's own roll cost applies. Significance from our random-entry Monte Carlo. The term-structure leg of the source note (HG1/HG6 futures curve) is data-gated and omitted. OUR RESULT: on CPER (2011+) the signal fires three times (2016, 2019, 2024) — copper's 12-month return was +18.5% median, 3/3 positive, versus a +0.4% base, but with an interim ~6-month soft patch — copper tended to dip modestly before the larger rally developed; n=3 is an anecdote and the credibility gate IGNOREs it.",
-      "definition": "Trigger when the copper/gold ratio (Norgate #CUGC) falls into the bottom 12% of its full history, the first such extreme in 12 months. Forward returns measured on CPER (copper) from the trigger month-end close over 3/6/12 months (12M is the headline)."
-    },
-    {
-      "id": "copper-gold-extreme-low-spx",
-      "name": "Copper/Gold ratio extreme-low → S&P 500",
-      "kind": "ratio_extreme_low",
-      "ratioTicker": "CUGC",
-      "ratioName": "Copper/Gold ratio",
-      "target": "GSPC",
-      "cadence": "monthly",
-      "pctile": 0.12,
-      "minHistoryMonths": 60,
-      "clusterMonths": 12,
-      "forwardMonths": [
-        3,
-        6,
-        12
-      ],
-      "regimeSmaMonths": 10,
-      "clusterDays": 0,
-      "thesisHorizonDays": 252,
-      "rationale": "The macro companion to the copper card, on the SAME trigger: when the copper/gold ratio hits an extreme low (bottom 12% of its full history, first in 12 months — our own percentile threshold, not the vendor's 0.16), what happens to the S&P 500? Mechanism: an extreme-low copper/gold reflects a global-growth fear washout, and such risk-off extremes have historically been contrarian-bullish for equities as the pessimism mean-reverts. Rebuilt on OUR data — Norgate #CUGC ratio (1993+) as the trigger, S&P 500 price index (Norgate $SPX) as the target, so this card sees EVERY trigger since 1993 (the larger, more honest sample of the two copper cards). CAVEAT: the extremes still cluster at a handful of macro bottoms (GFC, 2016, COVID, 2024), so treat the win rate as a small number of generational risk-off buys, not a dense timing edge — the same generalised-washout character as the copper card and the LIT-Optix re-test. Significance from our random-entry Monte Carlo. OUR RESULT: the ratio hit this extreme four times since 1993 (2008, 2016, 2019, 2024) — the S&P 500's 12-month return was +21.0% median, 4/4 positive, versus a +10.9% base (a ~+10pp edge); n=4 keeps it below significance (p=0.18), and the win rate is four generational risk-off buys, not a dense timing edge.",
-      "definition": "Trigger when the copper/gold ratio (Norgate #CUGC) falls into the bottom 12% of its full history, the first such extreme in 12 months. Forward returns measured on the S&P 500 price index from the trigger month-end close over 3/6/12 months."
     }
   ]
 }
