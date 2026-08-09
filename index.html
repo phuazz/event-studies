@@ -182,9 +182,17 @@ function fanChart(ev){
   // Latest instance realized path (the most recent trigger — e.g. the live one).
   // A monthly/seasonal event supplies the engine-precomputed daily fanLatest.
   const ps=ev.priceSeries||[], lastEp=ev.episodes[ev.episodes.length-1];
+  // Forward days elapsed for the most recent trigger. If it has already run its
+  // full 1Y window (elapsed >= 252, i.e. completed/expired), it is a finished
+  // historical episode already inside the bands — NOT a live instance, so do not
+  // highlight it as "latest".
+  const latestElapsed=ev.fanLatest?ev.fanLatest.elapsed:(lastEp&&lastEp.idx!=null?ps.length-1-lastEp.idx:null);
+  const latestLive=latestElapsed!=null&&latestElapsed<252;
   let latest={date:lastEp?lastEp.date:'',path:[]};
-  if(ev.fanLatest){latest={date:ev.fanLatest.date,path:(ev.fanLatest.path||[]).filter(p=>p.k<=K)};}
-  else if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
+  if(latestLive){
+    if(ev.fanLatest){latest={date:ev.fanLatest.date,path:(ev.fanLatest.path||[]).filter(p=>p.k<=K)};}
+    else if(lastEp&&lastEp.idx!=null){const i0=lastEp.idx;for(let k=0;i0+k<ps.length&&k<=K;k++)latest.path.push({k,v:ps[i0+k].ac/ps[i0].ac-1});}
+  }
   // Scale to what is actually DRAWN — p10/p90 bands, the drawdown line, and the
   // latest path — not the raw min/max episode (which would leave dead space).
   let yMin=0,yMax=0; for(const f of fan){yMin=Math.min(yMin,f.p10,f.ddBad);yMax=Math.max(yMax,f.p90);}
@@ -494,7 +502,7 @@ function renderEvent(ev,data){
     ${chart(ev)}
     <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
     ${fanChart(ev)}
-    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/9M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path (the most recent trigger, e.g. the live one). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.${ev.cadence==='monthly'?' For this annual seasonal signal the fan is drawn on daily bars anchored at each June close.':''}</div>
+    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/9M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path — shown only while that trigger is still inside its 1-year window; once it has completed/expired it is dropped (it is already in the bands). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.${ev.cadence==='monthly'?' For this annual seasonal signal the fan is drawn on daily bars anchored at each June close.':''}</div>
     <div class="sec-lbl">Per-horizon statistics</div>
     ${statsTable(ev)}
     <div class="sec-lbl">Episodes</div>
