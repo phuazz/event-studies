@@ -438,23 +438,26 @@ function livePanel(ev){
 // on an old, already-matured entry that the episode list and live panel do not
 // show? Surfaces the live condition and whether the mean-reversion bet is working.
 function currentStatePanel(ev){
-  const s=ev.currentState; if(!s) return '';
+  const s=ev.currentState; if(!s||!s.inZone) return ''; // nothing unless the condition holds now
   const pc=Math.round(s.pctileNow*100), nm=ev.indicatorName||'the ratio';
   const P=v=>(v==null?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%');
-  if(!s.inZone) return `<div class="live" style="background:var(--sa);border-color:var(--bd)">
-    <b>Signal condition — not active.</b> ${nm} is <b>${s.latest}</b> (${pc}th pct of its history), above the <b>${s.threshold}</b> trigger. No extreme in progress now.</div>`;
   const maxH=Math.max(12,...(ev.byHorizon||[]).map(r=>r.h||0));
   const matured=s.entryMonthsAgo!=null&&s.entryMonthsAgo>maxH;
-  let move='',verdict='';
+  let move='';
   if(s.sinceEntryPct!=null){
-    if(s.sinceEntryPct<-0.02){move=`has <b class="neg">deepened ${P(s.sinceEntryPct)}</b> since (low ${s.minSince})`;verdict=` — the mean-reversion this signal bets on has <b>NOT</b> happened; a persistent, deepening extreme is the value-trap failure mode, not the bounce the record rests on.`;}
-    else if(s.sinceEntryPct>0.02){move=`has <b class="pos">reverted ${P(s.sinceEntryPct)}</b> toward normal since`;verdict=` — the reversion the signal bets on is under way.`;}
-    else move='is roughly unchanged since';
+    if(s.sinceEntryPct<-0.02) move=`the ratio has <b style="color:var(--rd)">deepened ${P(s.sinceEntryPct)}</b> since (low ${s.minSince})`;
+    else if(s.sinceEntryPct>0.02) move=`the ratio has <b style="color:var(--gn)">reverted ${P(s.sinceEntryPct)}</b> toward normal since`;
+    else move='the ratio is roughly unchanged since';
   }
-  const ago=matured?`~${(s.entryMonthsAgo/12).toFixed(1)}y ago — already matured, so it is not a live instance`:`${s.entryMonthsAgo}mo ago, still maturing`;
+  if(matured){
+    // Persistent condition on a MATURED entry -> quiet grey note, NOT an alert.
+    const deep=s.sinceEntryPct!=null&&s.sinceEntryPct<-0.02;
+    return `<div class="kv dim" style="margin:10px 0;padding:9px 13px;background:var(--sa);border-radius:var(--rs)">
+      <b>No fresh trigger.</b> ${nm} is in the extreme zone (<b>${s.latest}</b>, ${pc}th pct, ${s.monthsInZone}mo) but the last entry <b>${s.entryDate}</b> matured ~${(s.entryMonthsAgo/12).toFixed(1)}y ago, and ${move}${deep?' — a persistent, deepening extreme (the value-trap failure mode), not a signal to act on':''}.</div>`;
+  }
+  // Genuinely fresh, still-maturing trigger -> the prominent alert is warranted.
   return `<div class="live" style="background:#FFFBEB;border-color:#FDE68A">
-    <b>● Signal condition ACTIVE now.</b> ${nm} is <b>${s.latest}</b> (<b>${pc}th percentile</b> of its history), below the <b>${s.threshold}</b> trigger, for <b>${s.monthsInZone}</b> consecutive months.
-    Last entry <b>${s.entryDate}</b> (${ago}); the ratio ${move}${verdict}</div>`;
+    <b>● Signal condition ACTIVE now.</b> ${nm} is <b>${s.latest}</b> (<b>${pc}th percentile</b> of its history), below the <b>${s.threshold}</b> trigger, for <b>${s.monthsInZone}</b> consecutive months. Last entry <b>${s.entryDate}</b> (${s.entryMonthsAgo}mo ago, still maturing); ${move}.</div>`;
 }
 
 function summaryCards(){
@@ -570,11 +573,13 @@ function ovCard({ev,s,c}){
 // Signal conditions active NOW — ratio cards whose trigger condition holds today,
 // even if the last entry already matured (so it is not a "live instance" above).
 function activeConditions(data){
-  const cs=data.events.filter(e=>e.currentState&&e.currentState.inZone);
+  // Only MATURED-but-still-in-zone conditions (a fresh in-zone trigger is a live
+  // instance, shown above). Context, not an alert -> quiet neutral styling.
+  const cs=data.events.filter(e=>{const s=e.currentState;return s&&s.inZone&&s.entryMonthsAgo!=null&&s.entryMonthsAgo>12;});
   if(!cs.length) return '';
-  const rows=cs.map(e=>{const s=e.currentState,pc=Math.round(s.pctileNow*100),deep=s.sinceEntryPct!=null&&s.sinceEntryPct<-0.02,mat=s.entryMonthsAgo!=null&&s.entryMonthsAgo>12;
-    return `<div style="padding:9px 14px;border:1px solid var(--bd);border-left:4px solid #F59E0B;border-radius:var(--rs);margin-bottom:6px;font-size:13px;color:var(--t2)"><b style="color:var(--t1)">${e.name}</b> — ${e.indicatorName||'ratio'} <b style="color:${deep?'var(--rd)':'var(--t1)'}">${s.latest}</b> (${pc}th pct of history), in the extreme <b>${s.monthsInZone}mo</b>${deep?', <span style="color:var(--rd)">deepening, not reverting</span>':''}. Entry ${s.entryDate}${mat?' — matured, not a live instance':''}.</div>`;}).join('');
-  return `<div class="plabel">Signal conditions active now <span style="text-transform:none;font-weight:400;letter-spacing:0;color:var(--t3)">— the trigger holds today; the entry may already have matured (not a live instance)</span></div>${rows}`;
+  const rows=cs.map(e=>{const s=e.currentState,pc=Math.round(s.pctileNow*100),deep=s.sinceEntryPct!=null&&s.sinceEntryPct<-0.02;
+    return `<div style="padding:8px 13px;border:1px solid var(--bd);border-radius:var(--rs);margin-bottom:6px;font-size:12.5px;color:var(--t3)"><b style="color:var(--t2)">${e.name}</b> — ${e.indicatorName||'ratio'} ${s.latest} (${pc}th pct), in the extreme ${s.monthsInZone}mo${deep?', <span style="color:var(--rd)">deepening, not reverting</span>':''}; entry ${s.entryDate} matured, no fresh trigger.</div>`;}).join('');
+  return `<div class="plabel" style="color:var(--t3)">Conditions in effect <span style="text-transform:none;font-weight:400;letter-spacing:0">— trigger holds but the last entry has matured; context only, not a live signal</span></div>${rows}`;
 }
 
 function renderOverview(data){
