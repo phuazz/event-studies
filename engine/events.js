@@ -1041,4 +1041,4 @@ if (require.main === module) {
   try { main(); } catch (e) { console.error('Fatal:', e.message); process.exit(1); }
 }
 
-module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS };
+module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, loadTicker };
