@@ -788,6 +788,127 @@ function analyseSeasonalStrongQuarter(target, ev) {
   };
 }
 
+// Election-cycle seasonal (monthly): enter the target at a fixed month-end
+// (July) in years matching a calendar cycle (US MIDTERM election years,
+// year % 4 == 2), then measure forward returns. Prompted by a SentimenTrader
+// "S&P 500 in August of midterm years" lead, rebuilt on OUR data (Norgate $SPX
+// monthly) with OUR numbers. Same emitted shape as analyseSeasonalStrongQuarter;
+// the "indicator" is purely the calendar, so priceSeries.ind is null.
+function analyseSeasonalElectionCycle(target, ev) {
+  assertSeasonalDateLogic();
+  if (!target.monthly || !target.monthly.length)
+    throw new Error(`${ev.target}: no monthly series (seasonal signal needs month-end closes)`);
+
+  const bars = target.monthly;
+  const dates = bars.map(b => b.d);
+  const ac = bars.map(b => b.ac);
+  const N = ac.length;
+
+  const forwardMonths = ev.forwardMonths || [3, 6, 12];
+  const labels = forwardMonths.map(h => `${h}M`);
+  const entryMonth = ev.entryMonth || 7;                    // 7 = end-of-July entry (August onward)
+  const yearMod = ev.yearModulo || 4;
+  const yearRem = ev.yearRemainder != null ? ev.yearRemainder : 2; // midterm: year % 4 == 2
+  const smaMonths = ev.regimeSmaMonths || 10;
+  const mm = String(entryMonth).padStart(2, '0');
+
+  const idxByYm = {};
+  for (let i = 0; i < N; i++) idxByYm[dates[i].slice(0, 7)] = i;
+  const smaMonthly = sma(ac, smaMonths);
+
+  const years = [...new Set(dates.map(d => +d.slice(0, 4)))].sort((a, b) => a - b);
+  const signals = []; // { idx: entry-month bar index, year }
+  for (const Y of years) {
+    if (((Y % yearMod) + yearMod) % yearMod !== yearRem) continue;
+    const iE = idxByYm[`${Y}-${mm}`];
+    if (iE == null) continue;
+    signals.push({ idx: iE, year: Y });
+  }
+  const episodes = signals.map(s => s.idx);
+
+  // Runtime tie-out: the first completed signal's entry + 6 months must land on
+  // the calendar month the date library predicts (entryMonth + 6), tying the
+  // abstract month arithmetic to the actual data. Month numbers here are the ISO
+  // 1-indexed month in the date strings (July == 7), not 0-indexed Date months.
+  if (forwardMonths.includes(6)) {
+    for (const s of signals) {
+      if (s.idx + 6 < N) {
+        const fd = dates[s.idx + 6], exp = addMonths(s.year, entryMonth, 6);
+        if (+fd.slice(0, 4) !== exp.year || +fd.slice(5, 7) !== exp.month1)
+          throw new Error(`election-cycle forward tie-out: ${dates[s.idx]} +6m -> ${fd}, expected ${exp.year}-${String(exp.month1).padStart(2, '0')}`);
+        break;
+      }
+    }
+  }
+
+  const baseFwd = {};
+  for (const h of forwardMonths) { const arr = []; for (let i = 0; i + h < N; i++) arr.push(ac[i + h] / ac[i] - 1); baseFwd[h] = arr; }
+
+  const byHorizon = forwardMonths.map((h, hi) => {
+    const fwd = [], mfe = [], mae = [];
+    for (const idx of episodes) {
+      if (idx + h >= N) continue;
+      fwd.push(ac[idx + h] / ac[idx] - 1);
+      let hiR = -Infinity, loR = Infinity;
+      for (let k = 1; k <= h; k++) { const r = ac[idx + k] / ac[idx] - 1; if (r > hiR) hiR = r; if (r < loR) loR = r; }
+      mfe.push(hiR); mae.push(loR);
+    }
+    const n = fwd.length, base = baseFwd[h], condMedian = median(fwd);
+    let ge = 0; const maxStart = N - h;
+    if (n > 0 && maxStart > 0) for (let b = 0; b < BOOT_ITERS; b++) { const draws = []; for (let j = 0; j < n; j++) draws.push(base[randInt(maxStart)]); if (median(draws) >= condMedian) ge++; }
+    const pTwoSided = n > 0 ? 2 * Math.min(ge, BOOT_ITERS - ge) / BOOT_ITERS : NaN;
+    const percentile = n > 0 ? 1 - ge / BOOT_ITERS : NaN;
+    let ciLo = NaN, ciHi = NaN;
+    if (n > 1) { const meds = []; for (let b = 0; b < BOOT_ITERS; b++) { const s = []; for (let j = 0; j < n; j++) s.push(fwd[randInt(n)]); meds.push(median(s)); } ciLo = quantile(meds, 0.05); ciHi = quantile(meds, 0.95); }
+    return { h, label: labels[hi], n, mean: mean(fwd), median: condMedian, hit: hitRate(fwd), mfeMedian: median(mfe), maeMedian: median(mae), baseMean: mean(base), baseMedian: median(base), baseHit: hitRate(base), edgeMedian: condMedian - median(base), ciLo, ciHi, pValue: pTwoSided, percentile };
+  });
+
+  const episodeRows = signals.map(s => {
+    const idx = s.idx, fwd = {};
+    for (const h of forwardMonths) fwd[h] = idx + h < N ? +((ac[idx + h] / ac[idx] - 1) * 100).toFixed(2) : null;
+    const regime = smaMonthly[idx] == null ? null : (ac[idx] > smaMonthly[idx] ? 'on' : 'off');
+    return { date: dates[idx], idx, regime, fwd };
+  });
+  const onCount = episodeRows.filter(e => e.regime === 'on').length;
+  const offCount = episodeRows.filter(e => e.regime === 'off').length;
+
+  const priceSeries = bars.map((b, i) => ({ d: b.d, ac: +ac[i].toFixed(2), ind: null }));
+
+  // ---- Range-of-outcomes fan on DAILY bars, anchored at each entry month ----
+  let fan = null, fanPrior = null, fanLatest = null;
+  const daily = target.daily || [];
+  if (daily.length > 60) {
+    const dac = daily.map(b => b.ac);
+    const entryAnchor = {}; // year -> last daily-bar index in that entry month
+    for (let i = 0; i < daily.length; i++) { const ym = daily[i].d.slice(0, 7); if (ym.slice(5, 7) === mm) entryAnchor[+ym.slice(0, 4)] = i; }
+    const anchors = signals.map(s => entryAnchor[s.year]).filter(a => a != null);
+    const rnd4 = x => +x.toFixed(4);
+    const mkFan = (anchorList) => {
+      const out = [{ k: 0, n: anchorList.length, p10: 0, p25: 0, p50: 0, p75: 0, p90: 0, mn: 0, mx: 0, ddMed: 0, ddBad: 0 }];
+      for (let k = 1; k <= 252; k++) {
+        const rets = [], dds = [];
+        for (const a of anchorList) { if (a + k >= dac.length) continue; const b0 = dac[a]; rets.push(dac[a + k] / b0 - 1); let lo = 0; for (let j = 1; j <= k; j++) { const r = dac[a + j] / b0 - 1; if (r < lo) lo = r; } dds.push(lo); }
+        if (rets.length < 3) break;
+        out.push({ k, n: rets.length, p10: rnd4(quantile(rets, 0.1)), p25: rnd4(quantile(rets, 0.25)), p50: rnd4(quantile(rets, 0.5)), p75: rnd4(quantile(rets, 0.75)), p90: rnd4(quantile(rets, 0.9)), mn: rnd4(Math.min(...rets)), mx: rnd4(Math.max(...rets)), ddMed: rnd4(quantile(dds, 0.5)), ddBad: rnd4(quantile(dds, 0.1)) });
+      }
+      return out;
+    };
+    fan = mkFan(anchors);
+    fanPrior = anchors.length > 1 ? mkFan(anchors.slice(0, -1)) : null;
+    const lastSig = signals[signals.length - 1];
+    const aL = lastSig ? entryAnchor[lastSig.year] : null;
+    if (aL != null) { const path = []; for (let k = 0; aL + k < dac.length && k <= 252; k++) path.push({ k, v: rnd4(dac[aL + k] / dac[aL] - 1) }); fanLatest = { date: dates[lastSig.idx], elapsed: dac.length - 1 - aL, path }; }
+  }
+
+  return {
+    nTriggers: signals.length, nEpisodes: episodes.length, clusterDays: 0,
+    firstDate: episodes.length ? dates[episodes[0]] : null,
+    lastDate: episodes.length ? dates[episodes[episodes.length - 1]] : null,
+    regimeSplit: { on: onCount, off: offCount, untagged: episodeRows.length - onCount - offCount },
+    indicatorName: 'midterm-year calendar', byHorizon, episodes: episodeRows, priceSeries, fan, fanPrior, fanLatest
+  };
+}
+
 // Ratio-extreme (monthly): a price RATIO (e.g. copper/gold) falls to a LOW
 // extreme -> forward returns on a TARGET instrument (copper for the bull-copper
 // card, the S&P 500 for the macro card). The SentimenTrader copper/gold lead,
@@ -982,6 +1103,21 @@ function main() {
         thesisHorizonDays: ev.thesisHorizonDays || null,
         rationale: ev.rationale, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the June month-end close (event-study convention).',
+        ...res
+      });
+      console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
+      continue;
+    }
+
+    if (ev.kind === 'seasonal_election_cycle') {
+      const target = loadTicker(ev.target);
+      const res = analyseSeasonalElectionCycle(target, ev);
+      out.events.push({
+        id: ev.id, name: ev.name, kind: ev.kind,
+        target: ev.target, cadence: 'monthly',
+        thesisHorizonDays: ev.thesisHorizonDays || null,
+        rationale: ev.rationale, definition: ev.definition,
+        entryNote: 'Forward return measured on the monthly price index from the end-of-July close of a midterm election year (event-study convention).',
         ...res
       });
       console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
