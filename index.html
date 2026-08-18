@@ -331,7 +331,12 @@ function credibility(ev){
   let action = total>=7?'act':total>=5?'monitor':'ignore';
   if(signif===0 && action==='act') action='monitor';
   if(ev.nEpisodes<4) action='ignore';
-  return {total,action,bestP,breakdown:{'Sample':sample,'Significance':signif,'Tail asym':tail,'Regime':regime,'Consistency':consistency}};
+  // Explicit analyst override — can only DOWNGRADE the mechanical gate (never raise
+  // it), for cards whose significance the gate cannot see through (e.g. a full-sample
+  // edge that is a pre-era artefact). Logged on the card so the cap is transparent.
+  let override=null;
+  if(ev.gateOverride){ const ORD={act:2,monitor:1,ignore:0}; if(ORD[ev.gateOverride]!=null && ORD[ev.gateOverride]<ORD[action]){ override={from:action,to:ev.gateOverride,note:ev.gateOverrideNote||''}; action=ev.gateOverride; } }
+  return {total,action,bestP,override,breakdown:{'Sample':sample,'Significance':signif,'Tail asym':tail,'Regime':regime,'Consistency':consistency}};
 }
 function gate(c){const cls=c.action==='act'?'gate-act':c.action==='ignore'?'gate-ignore':'gate-monitor';return `<span class="gate ${cls}">${c.action.toUpperCase()} ${c.total}/10</span>`;}
 function gateDot(c){const col=c.action==='act'?'var(--gn)':c.action==='ignore'?'var(--t3)':'var(--am)';return `<span class="gdot" style="background:${col}"></span>`;}
@@ -496,13 +501,14 @@ function renderEvent(ev,data){
       ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
     </div>
     <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}</div>
+    ${cred.override?`<div class="kv" style="background:#fff7ed;border-left:3px solid var(--am);padding:8px 10px;font-size:12.5px;margin-top:6px"><b>Analyst override — capped ${cred.override.from.toUpperCase()} → ${cred.override.to.toUpperCase()}.</b> ${cred.override.note}</div>`:''}
     ${livePanel(ev)}
     ${currentStatePanel(ev)}
     <div class="sec-lbl">Forward returns — conditional vs baseline</div>
     ${chart(ev)}
     <div class="sec-lbl">Range of outcomes — forward-return fan &amp; drawdown envelope</div>
     ${fanChart(ev)}
-    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/9M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path — shown only while that trigger is still inside its 1-year window; once it has completed/expired it is dropped (it is already in the bands). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.${ev.cadence==='monthly'?' For this annual seasonal signal the fan is drawn on daily bars anchored at each June close.':''}</div>
+    <div class="kv dim" style="font-size:12.5px;margin-top:8px">Shaded bands: 10–90th and 25–75th percentile of cumulative forward return across all episodes (red near → amber far), from the trigger close. Black line = median path; markers at 1W/1M/3M/6M/9M/1Y. <b style="color:var(--rd)">Red dashed</b> = the 90th-percentile-worst running drawdown by horizon — the deepest path you would have had to sit through. The <b style="color:var(--ac)">blue line</b> is the latest instance's realised path — shown only while that trigger is still inside its 1-year window; once it has completed/expired it is dropped (it is already in the bands). Hover the chart for the median, percentile bands, worst drawdown, and latest-instance value at each forward day. Bands narrow at long horizons as fewer episodes have a full forward window.${ev.cadence==='monthly'?' For this annual seasonal signal the fan is drawn on daily bars anchored at each entry-month close.':''}</div>
     <div class="sec-lbl">Per-horizon statistics</div>
     ${statsTable(ev)}
     <div class="sec-lbl">Episodes</div>

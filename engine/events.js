@@ -1116,6 +1116,10 @@ function main() {
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly',
         thesisHorizonDays: ev.thesisHorizonDays || null,
+        // Explicit, logged analyst override of the mechanical credibility gate
+        // (the gate scores on full-sample significance, which here is a pre-1974
+        // artefact). Can only DOWNGRADE conviction, never raise it.
+        gateOverride: ev.gateOverride || null, gateOverrideNote: ev.gateOverrideNote || null,
         rationale: ev.rationale, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the end-of-July close of a midterm election year (event-study convention).',
         ...res
@@ -1177,4 +1181,4 @@ if (require.main === module) {
   try { main(); } catch (e) { console.error('Fatal:', e.message); process.exit(1); }
 }
 
-module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, loadTicker };
+module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, analyseSeasonalElectionCycle, loadTicker };
