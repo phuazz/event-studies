@@ -441,6 +441,52 @@ function detectOversoldReversionInDowntrend(target, ev) {
   return { dates, ac, triggers, indicator: rsi, indicatorName: `RSI(${ev.rsiPeriod || 14})` };
 }
 
+// Volatility-normalised thrust: a ~1-week move measured in units of the
+// instrument's OWN prior volatility ("sigma move"), so a 10% week in a calm
+// regime scores higher than a 10% week in a violent one. Mechanism: a move that
+// is large RELATIVE to recent vol signals a genuine repricing/participation
+// shift rather than noise, and such thrusts have shown short-horizon
+// continuation. CAUSAL by construction: the vol denominator is measured over the
+// `volWindow` days ENDING BEFORE the return window opens, so no part of the move
+// being scored is inside its own benchmark. Prompted by a charted observation of
+// BTC weekly sigma moves; rebuilt on OUR data with OUR threshold.
+function detectVolatilityThrust(target, ev) {
+  const ac = target.daily.map(b => b.ac);
+  const dates = target.daily.map(b => b.d);
+  const win = ev.retWindow || 5;                 // 5 trading days ~ one week
+  const volWin = ev.volWindow || 60;
+  const thr = ev.sigmaThreshold != null ? ev.sigmaThreshold : 2;
+  const cap = ev.sigmaCap != null ? ev.sigmaCap : null;   // optional upper bound
+  const n = ac.length;
+
+  const lr = new Array(n).fill(null);
+  for (let i = 1; i < n; i++) lr[i] = (ac[i] > 0 && ac[i - 1] > 0) ? Math.log(ac[i] / ac[i - 1]) : null;
+
+  // Rolling stdev of daily log returns over volWin, ending at each index j.
+  const sd = new Array(n).fill(null);
+  for (let j = volWin; j < n; j++) {
+    let s = 0, cnt = 0;
+    for (let k = j - volWin + 1; k <= j; k++) { if (lr[k] == null) { cnt = -1; break; } s += lr[k]; cnt++; }
+    if (cnt !== volWin) continue;
+    const m = s / volWin;
+    let s2 = 0;
+    for (let k = j - volWin + 1; k <= j; k++) s2 += (lr[k] - m) * (lr[k] - m);
+    sd[j] = Math.sqrt(s2 / (volWin - 1));
+  }
+
+  const sigma = new Array(n).fill(null);
+  const triggers = [];
+  for (let i = win; i < n; i++) {
+    const j = i - win;                            // vol as of BEFORE the move window
+    if (sd[j] == null || !(sd[j] > 0)) continue;
+    const r = ac[i] / ac[i - win] - 1;
+    const z = r / (sd[j] * Math.sqrt(win));       // ~1-week move in prior-vol units
+    sigma[i] = +z.toFixed(2);
+    if (z >= thr && (cap == null || z < cap)) triggers.push(i);
+  }
+  return { dates, ac, triggers, indicator: sigma, indicatorName: `${win}d move / ${volWin}d vol (σ)` };
+}
+
 // Momentum thrust out of a multi-month low (the SentimenTrader coffee study,
 // now testable on a single-commodity instrument): a `rocWindow`-day rate of
 // change above `thrustPct` while the instrument also printed a `lowLookback`-day
@@ -1225,6 +1271,8 @@ function main() {
       series = detectRsiOverboughtToMid(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_cross') {
       series = detectBreadthCross(spy, ev, universe);
+    } else if (ev.kind === 'volatility_thrust') {
+      series = detectVolatilityThrust(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_recovery_from_drawdown') {
       series = detectBreadthRecoveryFromDrawdown(loadTicker(ev.target), ev, resolveUniverse(ev.breadthUniverse || cat.defaultUniverse));
     } else if (ev.kind === 'breadth_panic_extreme') {
