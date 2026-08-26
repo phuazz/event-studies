@@ -499,7 +499,9 @@ function renderEvent(ev,data){
       <span class="tag">regime on/off ${ev.regimeSplit.on}/${ev.regimeSplit.off}</span>
       <span class="tag">${ev.firstDate} → ${ev.lastDate}</span>
       ${ev.nEpisodes<8?`<span class="tag warn">⚠ thin sample (n=${ev.nEpisodes}) — weak evidence</span>`:''}
+      ${ev.carriedForward?`<span class="tag warn">not recomputed today</span>`:''}
     </div>
+    ${ev.carriedForward?`<div class="kv" style="background:#fff7ed;border-left:3px solid var(--am);padding:8px 10px;font-size:12.5px;margin-top:6px"><b>Carried forward — these numbers were last computed ${(ev.carriedFrom||'').slice(0,10)||'at an unknown date'}, not today.</b> ${ev.carriedReason||''}. The rest of this page refreshed normally; this card did not, so read its figures at that vintage.</div>`:''}
     <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}</div>
     ${cred.override?`<div class="kv" style="background:#fff7ed;border-left:3px solid var(--am);padding:8px 10px;font-size:12.5px;margin-top:6px"><b>Analyst override — capped ${cred.override.from.toUpperCase()} → ${cred.override.to.toUpperCase()}.</b> ${cred.override.note}</div>`:''}
     ${livePanel(ev)}
@@ -650,7 +652,10 @@ async function boot(){
     DATA=await r.json();
     const w=DATA.dailyWindow||{};
     document.getElementById('meta').innerHTML=
-      `Generated ${(DATA.generatedAt||'').slice(0,10)}<br>Daily window ${w.start||'?'} → ${w.end||'?'}<br>${DATA.events.length} event(s) × ${(DATA.horizonLabels||HZ_FALLBACK).length} horizons`;
+      `Generated ${(DATA.generatedAt||'').slice(0,10)}<br>Daily window ${w.start||'?'} → ${w.end||'?'}<br>${DATA.events.length} event(s) × ${(DATA.horizonLabels||HZ_FALLBACK).length} horizons`
+      // One page-level count so a reader who never opens a card still learns the
+      // page carries more than one vintage; the per-card block says which and when.
+      + ((DATA.carriedForward||[]).length?`<br><b style="color:var(--am)">${DATA.carriedForward.length} card(s) carried forward, not recomputed</b>`:'');
     paint();
   }catch(e){
     document.getElementById('root').innerHTML='<div class="err">Could not load events_results.json — run <code>node engine/events.js</code> first. ('+e.message+')</div>';

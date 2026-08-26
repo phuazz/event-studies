@@ -125,7 +125,7 @@
         { "t": "THD", "n": "Thailand", "cls": "Country ETF" },
         { "t": "EPOL", "n": "Poland", "cls": "Country ETF" },
         { "t": "EPHE", "n": "Philippines", "cls": "Country ETF" },
-        { "t": "RSX-202212", "n": "Russia (delisted 2022)", "cls": "Country ETF (delisted)" }
+        { "t": "RSX-202212", "n": "Russia (delisted 2022)", "cls": "Country ETF (delisted)", "noFetch": "VanEck liquidated the fund; Yahoo no longer serves any history for it. Kept in the universe because the 2022 episode is real history the catalogue may reference again, but the fetch would fail on it forever." }
       ]
     }
   },

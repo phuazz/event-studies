@@ -24,6 +24,13 @@ const UNI = (() => {
     for (const tk of (u.tickers || [])) {
       if (seen.has(tk.t)) continue;
       seen.add(tk.t);
+      // A `noFetch` reason means the vendor will never serve this one again --
+      // a liquidated fund, not an outage. It stays declared because the episode
+      // is real history the catalogue may reference, but retrying it daily
+      // prints a FAILED line forever, and a log that always carries a failure
+      // is a log nobody reads. The reason is carried into the manifest so the
+      // exclusion is visible rather than silent.
+      if (tk.noFetch) { out.push({ t: tk.t, n: tk.n, c: tk.cls || tk.c || '', noFetch: tk.noFetch }); continue; }
       out.push({ t: tk.t, n: tk.n, c: tk.cls || tk.c || '' });
     }
   }
@@ -137,6 +144,10 @@ async function fetchOne(entry) {
   const dir = HISTORY_DIR;
   const file = path.join(dir, `${entry.t}.json`);
 
+  if (entry.noFetch) {
+    return { ticker: entry.t, status: 'retired', reason: entry.noFetch };
+  }
+
   // Skip if recently refreshed
   if (fs.existsSync(file)) {
     const ageHours = (Date.now() - fs.statSync(file).mtimeMs) / 3.6e6;
@@ -204,7 +215,9 @@ async function main() {
     try {
       const r = await fetchOne(e);
       results.push(r);
-      if (r.status === 'skipped') {
+      if (r.status === 'retired') {
+        console.log(`  [${i + 1}/${UNI.length}] ${e.t} retired — ${r.reason}`);
+      } else if (r.status === 'skipped') {
         console.log(`  [${i + 1}/${UNI.length}] ${e.t} skipped (age ${r.age}h)`);
       } else {
         console.log(`  [${i + 1}/${UNI.length}] ${e.t} OK — ${r.nDaily} daily, ${r.nMonthly} monthly, since ${r.inception} (${r.sizeKB} KB)`);
@@ -222,13 +235,20 @@ async function main() {
     total: UNI.length,
     ok: results.filter(r => r.status === 'ok').length,
     skipped: results.filter(r => r.status === 'skipped').length,
+    retired: results.filter(r => r.status === 'retired')
+      .map(r => ({ ticker: r.ticker, reason: r.reason })),
     failed: fails,
     tickers: results.map(r => ({ ticker: r.ticker, inception: r.inception, status: r.status }))
   };
   fs.writeFileSync(path.join(HISTORY_DIR, '_manifest.json'), JSON.stringify(manifest, null, 2));
 
-  console.log(`\nDone. ok=${manifest.ok} skipped=${manifest.skipped} failed=${manifest.failed.length}`);
-  if (fails.length > UNI.length * 0.5) { console.error('More than 50% failed — aborting.'); process.exit(1); }
+  console.log(`\nDone. ok=${manifest.ok} skipped=${manifest.skipped} ` +
+              `retired=${manifest.retired.length} failed=${manifest.failed.length}`);
+  // The denominator excludes retired entries: they are declared-unfetchable, not
+  // evidence about whether the vendor is up, and counting them would drift the
+  // abort threshold as more instruments are retired.
+  const live = UNI.length - manifest.retired.length;
+  if (fails.length > live * 0.5) { console.error('More than 50% failed — aborting.'); process.exit(1); }
 }
 
 if (require.main === module) main().catch(err => { console.error('Fatal:', err); process.exit(1); });

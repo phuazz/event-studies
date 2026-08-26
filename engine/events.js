@@ -139,6 +139,45 @@ function loadTicker(tk) {
   return JSON.parse(fs.readFileSync(f, 'utf8'));
 }
 
+// ---------- inputs this machine cannot always produce ----------
+//
+// NOT EVERY INPUT COMES FROM THE YAHOO FETCH. data/GSPC.json is Norgate-sourced
+// by scripts/fetch_gspc_norgate.py, and data/ is gitignored, so a CI runner
+// checks out clean and can NEVER have it. Until 2026-08-26 the two GSPC cards
+// therefore killed the whole refresh at the engine step: `Fatal: data/GSPC.json
+// not found`. events_results.json then went uncommitted from 2026-08-18, and
+// the dashboard — which runtime-fetches that file — served eight-day-old
+// results for six weekdays while looking live. The loud failure went to an
+// inbox; the public page said nothing.
+//
+// The naive repair is to skip a card whose inputs are missing, but these two
+// are HALF the catalogue and skipping would delete them from the page. The
+// other repair, committing the vendor series, is barred: this repo is public
+// and the Norgate licence is personal-use.
+//
+// So carry the card's last computed result forward and SAY SO on it. These are
+// monthly seasonal studies that only move at month-end, which is what makes
+// carrying defensible — and the stamp travels with the card, so the page can
+// disclose the vintage per card rather than in one global footnote.
+//
+// The guard is that carrying is permitted ONLY for a ticker named here. Any
+// other missing input is still fatal, because it means the fetch broke.
+const LOCAL_ONLY_TICKERS = new Set(['GSPC']);
+
+function requiredTickers(ev) {
+  return [ev.target, ev.ratioTicker].filter(Boolean);
+}
+
+function missingInputs(ev) {
+  return requiredTickers(ev).filter(
+    tk => !fs.existsSync(path.join(DATA_DIR, `${tk}.json`)));
+}
+
+function loadPreviousResults() {
+  if (!fs.existsSync(OUT)) return null;
+  try { return JSON.parse(fs.readFileSync(OUT, 'utf8')); } catch { return null; }
+}
+
 // Global risk regime indicator (methodology §7.4): SPY above its 200-day SMA.
 // Returned as a map from ISO date -> true/false for every SPY daily bar where
 // the 200-day SMA is defined.
@@ -1083,11 +1122,51 @@ function main() {
       `${cat.events.length} pre-registered event(s) x ${HORIZONS.length} horizons = ` +
       `${cat.events.length * HORIZONS.length} cells screened. P-values are NOT corrected for ` +
       `multiple testing; treat a single green cell among many as weak evidence.`,
-    events: []
+    events: [],
+    // Cards this run could not recompute, each with the input that was absent.
+    // Written even when empty so the dashboard can tell "nothing carried" from
+    // "an older engine that did not report".
+    carriedForward: []
   };
+
+  const previous = loadPreviousResults();
 
   for (const ev of cat.events) {
     if (!ev.rationale) { console.warn(`SKIP ${ev.id}: no rationale (not admitted to the catalogue).`); continue; }
+
+    const missing = missingInputs(ev);
+    if (missing.length) {
+      const foreign = missing.filter(tk => !LOCAL_ONLY_TICKERS.has(tk));
+      if (foreign.length) {
+        // Not a known local-only input — the fetch is broken. Fail as before.
+        throw new Error(
+          `data/${foreign[0]}.json not found — run scripts/fetch_history.js`);
+      }
+      const prior = previous && (previous.events || []).find(e => e.id === ev.id);
+      const note = `${missing.join(', ')} is sourced locally (Norgate) and is not ` +
+                   `available to this run`;
+      if (prior) {
+        out.events.push({
+          ...prior,
+          carriedForward: true,
+          carriedFrom: prior.carriedFrom || previous.generatedAt || null,
+          carriedReason: note
+        });
+        out.carriedForward.push({
+          id: ev.id, missing, reason: note,
+          computedAt: prior.carriedFrom || previous.generatedAt || null
+        });
+        console.log(`CARRIED ${ev.id}: ${note}; showing the result computed ` +
+                    `${prior.carriedFrom || previous.generatedAt}`);
+      } else {
+        out.carriedForward.push({
+          id: ev.id, missing, reason: note, computedAt: null
+        });
+        console.warn(`UNAVAILABLE ${ev.id}: ${note}, and no earlier result to carry`);
+      }
+      continue;
+    }
+
     console.log(`Analysing ${ev.id} (${ev.kind})...`);
 
     // Monthly seasonal kind: emits the standard shape on monthly horizons, then
@@ -1173,8 +1252,33 @@ function main() {
     console.log(`  ${res.nTriggers} triggers -> ${res.nEpisodes} independent episodes (regime on/off: ${res.regimeSplit.on}/${res.regimeSplit.off})`);
   }
 
+  // Every admitted card must leave this loop, computed or carried. Without this
+  // an unhandled kind, or a carry with nothing to carry, drops a card off the
+  // page while the run still reports success — the same silent-omission failure
+  // the carry logic exists to avoid, one level up.
+  const admitted = cat.events.filter(e => e.rationale).map(e => e.id);
+  const present = new Set(out.events.map(e => e.id));
+  const lost = admitted.filter(id => !present.has(id));
+  if (lost.length) {
+    throw new Error(
+      `${lost.length} admitted card(s) produced no result and would vanish from ` +
+      `the page: ${lost.join(', ')}. Refusing to write a partial catalogue.`);
+  }
+
+  // A carried card is a real result on a public page, so it is never allowed to
+  // pass silently: the count prints on every run, green or not.
+  if (out.carriedForward.length) {
+    console.log(`\n${out.carriedForward.length} card(s) carried forward, not recomputed:`);
+    for (const c of out.carriedForward) {
+      console.log(`  ${c.id} — missing ${c.missing.join(', ')}` +
+                  `${c.computedAt ? `, last computed ${c.computedAt}` : ', NO prior result'}`);
+    }
+    console.log('  Run scripts/fetch_gspc_norgate.py locally, then re-run, to recompute these.');
+  }
+
   fs.writeFileSync(OUT, JSON.stringify(out));
-  console.log(`\nWrote ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(1)} KB) — ${out.events.length} event(s).`);
+  console.log(`\nWrote ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(1)} KB) — ` +
+              `${out.events.length} event(s), ${out.carriedForward.length} carried.`);
 }
 
 if (require.main === module) {
