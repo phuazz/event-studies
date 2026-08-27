@@ -6,28 +6,96 @@
     "core": {
       "_doc": "Initial focused cross-asset set. Liquid ETFs, all daily-available via Yahoo v8. The bootstrap universe; grow as events require.",
       "tickers": [
-        { "t": "SPY", "n": "S&P 500", "cls": "US Equity" },
-        { "t": "EEM", "n": "Emerging Markets", "cls": "EM Equity" },
-        { "t": "TLT", "n": "US 20Y+ Treasury", "cls": "Fixed Income" },
-        { "t": "GLD", "n": "Gold", "cls": "Commodity" },
-        { "t": "SLV", "n": "Silver", "cls": "Commodity" },
-        { "t": "LIT", "n": "Lithium & Battery Tech (Global X)", "cls": "Thematic Equity" }
+        {
+          "t": "SPY",
+          "n": "S&P 500",
+          "cls": "US Equity"
+        },
+        {
+          "t": "EEM",
+          "n": "Emerging Markets",
+          "cls": "EM Equity"
+        },
+        {
+          "t": "TLT",
+          "n": "US 20Y+ Treasury",
+          "cls": "Fixed Income"
+        },
+        {
+          "t": "GLD",
+          "n": "Gold",
+          "cls": "Commodity"
+        },
+        {
+          "t": "SLV",
+          "n": "Silver",
+          "cls": "Commodity"
+        },
+        {
+          "t": "LIT",
+          "n": "Lithium & Battery Tech (Global X)",
+          "cls": "Thematic Equity"
+        }
       ]
     },
     "china": {
       "_doc": "US-listed China/HK ETFs spanning A-shares, offshore large-cap and internet/tech — the breadth basket for the China recovery study. Yahoo-fetched. A SEGMENT-level proxy for Chinese-equity participation, NOT Hang Seng constituents (we hold no HK equities). Coarse (~11 items) and USD-denominated; honest caveats carried on the card.",
       "tickers": [
-        { "t": "FXI", "n": "China large-cap (HK)", "cls": "China ETF" },
-        { "t": "MCHI", "n": "MSCI China", "cls": "China ETF" },
-        { "t": "GXC", "n": "China broad", "cls": "China ETF" },
-        { "t": "EWH", "n": "Hong Kong", "cls": "China ETF" },
-        { "t": "ASHR", "n": "China A-shares (CSI 300)", "cls": "China ETF" },
-        { "t": "CNYA", "n": "China A-shares (MSCI)", "cls": "China ETF" },
-        { "t": "KBA", "n": "China A-shares (KraneShares)", "cls": "China ETF" },
-        { "t": "KWEB", "n": "China internet", "cls": "China ETF" },
-        { "t": "CQQQ", "n": "China technology", "cls": "China ETF" },
-        { "t": "CXSE", "n": "China ex-state-owned", "cls": "China ETF" },
-        { "t": "PGJ", "n": "China (US-listed)", "cls": "China ETF" }
+        {
+          "t": "FXI",
+          "n": "China large-cap (HK)",
+          "cls": "China ETF"
+        },
+        {
+          "t": "MCHI",
+          "n": "MSCI China",
+          "cls": "China ETF"
+        },
+        {
+          "t": "GXC",
+          "n": "China broad",
+          "cls": "China ETF"
+        },
+        {
+          "t": "EWH",
+          "n": "Hong Kong",
+          "cls": "China ETF"
+        },
+        {
+          "t": "ASHR",
+          "n": "China A-shares (CSI 300)",
+          "cls": "China ETF"
+        },
+        {
+          "t": "CNYA",
+          "n": "China A-shares (MSCI)",
+          "cls": "China ETF"
+        },
+        {
+          "t": "KBA",
+          "n": "China A-shares (KraneShares)",
+          "cls": "China ETF"
+        },
+        {
+          "t": "KWEB",
+          "n": "China internet",
+          "cls": "China ETF"
+        },
+        {
+          "t": "CQQQ",
+          "n": "China technology",
+          "cls": "China ETF"
+        },
+        {
+          "t": "CXSE",
+          "n": "China ex-state-owned",
+          "cls": "China ETF"
+        },
+        {
+          "t": "PGJ",
+          "n": "China (US-listed)",
+          "cls": "China ETF"
+        }
       ]
     },
     "korea": {
@@ -35,61 +103,281 @@
       "_survivorship": "CURRENT-MEMBERS-ONLY (not point-in-time)",
       "_benchmark": "EWY",
       "tickers": [
-        { "t": "005930.KS", "n": "Samsung Electronics", "cls": "KOSPI" },
-        { "t": "000660.KS", "n": "SK Hynix", "cls": "KOSPI" },
-        { "t": "005380.KS", "n": "Hyundai Motor", "cls": "KOSPI" },
-        { "t": "000270.KS", "n": "Kia", "cls": "KOSPI" },
-        { "t": "051910.KS", "n": "LG Chem", "cls": "KOSPI" },
-        { "t": "006400.KS", "n": "Samsung SDI", "cls": "KOSPI" },
-        { "t": "035420.KS", "n": "NAVER", "cls": "KOSPI" },
-        { "t": "035720.KS", "n": "Kakao", "cls": "KOSPI" },
-        { "t": "207940.KS", "n": "Samsung Biologics", "cls": "KOSPI" },
-        { "t": "068270.KS", "n": "Celltrion", "cls": "KOSPI" },
-        { "t": "005490.KS", "n": "POSCO Holdings", "cls": "KOSPI" },
-        { "t": "012330.KS", "n": "Hyundai Mobis", "cls": "KOSPI" },
-        { "t": "105560.KS", "n": "KB Financial", "cls": "KOSPI" },
-        { "t": "055550.KS", "n": "Shinhan Financial", "cls": "KOSPI" },
-        { "t": "086790.KS", "n": "Hana Financial", "cls": "KOSPI" },
-        { "t": "316140.KS", "n": "Woori Financial", "cls": "KOSPI" },
-        { "t": "373220.KS", "n": "LG Energy Solution", "cls": "KOSPI" },
-        { "t": "051900.KS", "n": "LG H&H", "cls": "KOSPI" },
-        { "t": "032830.KS", "n": "Samsung Life", "cls": "KOSPI" },
-        { "t": "000810.KS", "n": "Samsung Fire & Marine", "cls": "KOSPI" },
-        { "t": "015760.KS", "n": "KEPCO", "cls": "KOSPI" },
-        { "t": "034730.KS", "n": "SK Inc", "cls": "KOSPI" },
-        { "t": "017670.KS", "n": "SK Telecom", "cls": "KOSPI" },
-        { "t": "030200.KS", "n": "KT", "cls": "KOSPI" },
-        { "t": "009150.KS", "n": "Samsung Electro-Mechanics", "cls": "KOSPI" },
-        { "t": "066570.KS", "n": "LG Electronics", "cls": "KOSPI" },
-        { "t": "003550.KS", "n": "LG Corp", "cls": "KOSPI" },
-        { "t": "011200.KS", "n": "HMM", "cls": "KOSPI" },
-        { "t": "010130.KS", "n": "Korea Zinc", "cls": "KOSPI" },
-        { "t": "011170.KS", "n": "Lotte Chemical", "cls": "KOSPI" },
-        { "t": "090430.KS", "n": "Amorepacific", "cls": "KOSPI" },
-        { "t": "018260.KS", "n": "Samsung SDS", "cls": "KOSPI" },
-        { "t": "010950.KS", "n": "S-Oil", "cls": "KOSPI" },
-        { "t": "096770.KS", "n": "SK Innovation", "cls": "KOSPI" },
-        { "t": "259960.KS", "n": "Krafton", "cls": "KOSPI" },
-        { "t": "251270.KS", "n": "Netmarble", "cls": "KOSPI" },
-        { "t": "034220.KS", "n": "LG Display", "cls": "KOSPI" },
-        { "t": "004020.KS", "n": "Hyundai Steel", "cls": "KOSPI" },
-        { "t": "024110.KS", "n": "Industrial Bank of Korea", "cls": "KOSPI" },
-        { "t": "138040.KS", "n": "Meritz Financial", "cls": "KOSPI" },
-        { "t": "329180.KS", "n": "HD Hyundai Heavy", "cls": "KOSPI" },
-        { "t": "042660.KS", "n": "Hanwha Ocean", "cls": "KOSPI" },
-        { "t": "010140.KS", "n": "Samsung Heavy", "cls": "KOSPI" },
-        { "t": "267250.KS", "n": "HD Hyundai", "cls": "KOSPI" },
-        { "t": "000100.KS", "n": "Yuhan", "cls": "KOSPI" },
-        { "t": "128940.KS", "n": "Hanmi Pharm", "cls": "KOSPI" },
-        { "t": "097950.KS", "n": "CJ CheilJedang", "cls": "KOSPI" },
-        { "t": "271560.KS", "n": "Orion", "cls": "KOSPI" },
-        { "t": "021240.KS", "n": "Coway", "cls": "KOSPI" },
-        { "t": "036570.KS", "n": "NCSoft", "cls": "KOSPI" },
-        { "t": "028260.KS", "n": "Samsung C&T", "cls": "KOSPI" },
-        { "t": "009540.KS", "n": "HD KSOE", "cls": "KOSPI" },
-        { "t": "047810.KS", "n": "Korea Aerospace", "cls": "KOSPI" },
-        { "t": "012450.KS", "n": "Hanwha Aerospace", "cls": "KOSPI" },
-        { "t": "079550.KS", "n": "LIG Nex1", "cls": "KOSPI" }
+        {
+          "t": "005930.KS",
+          "n": "Samsung Electronics",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "000660.KS",
+          "n": "SK Hynix",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "005380.KS",
+          "n": "Hyundai Motor",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "000270.KS",
+          "n": "Kia",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "051910.KS",
+          "n": "LG Chem",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "006400.KS",
+          "n": "Samsung SDI",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "035420.KS",
+          "n": "NAVER",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "035720.KS",
+          "n": "Kakao",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "207940.KS",
+          "n": "Samsung Biologics",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "068270.KS",
+          "n": "Celltrion",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "005490.KS",
+          "n": "POSCO Holdings",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "012330.KS",
+          "n": "Hyundai Mobis",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "105560.KS",
+          "n": "KB Financial",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "055550.KS",
+          "n": "Shinhan Financial",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "086790.KS",
+          "n": "Hana Financial",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "316140.KS",
+          "n": "Woori Financial",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "373220.KS",
+          "n": "LG Energy Solution",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "051900.KS",
+          "n": "LG H&H",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "032830.KS",
+          "n": "Samsung Life",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "000810.KS",
+          "n": "Samsung Fire & Marine",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "015760.KS",
+          "n": "KEPCO",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "034730.KS",
+          "n": "SK Inc",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "017670.KS",
+          "n": "SK Telecom",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "030200.KS",
+          "n": "KT",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "009150.KS",
+          "n": "Samsung Electro-Mechanics",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "066570.KS",
+          "n": "LG Electronics",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "003550.KS",
+          "n": "LG Corp",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "011200.KS",
+          "n": "HMM",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "010130.KS",
+          "n": "Korea Zinc",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "011170.KS",
+          "n": "Lotte Chemical",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "090430.KS",
+          "n": "Amorepacific",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "018260.KS",
+          "n": "Samsung SDS",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "010950.KS",
+          "n": "S-Oil",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "096770.KS",
+          "n": "SK Innovation",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "259960.KS",
+          "n": "Krafton",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "251270.KS",
+          "n": "Netmarble",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "034220.KS",
+          "n": "LG Display",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "004020.KS",
+          "n": "Hyundai Steel",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "024110.KS",
+          "n": "Industrial Bank of Korea",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "138040.KS",
+          "n": "Meritz Financial",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "329180.KS",
+          "n": "HD Hyundai Heavy",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "042660.KS",
+          "n": "Hanwha Ocean",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "010140.KS",
+          "n": "Samsung Heavy",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "267250.KS",
+          "n": "HD Hyundai",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "000100.KS",
+          "n": "Yuhan",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "128940.KS",
+          "n": "Hanmi Pharm",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "097950.KS",
+          "n": "CJ CheilJedang",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "271560.KS",
+          "n": "Orion",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "021240.KS",
+          "n": "Coway",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "036570.KS",
+          "n": "NCSoft",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "028260.KS",
+          "n": "Samsung C&T",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "009540.KS",
+          "n": "HD KSOE",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "047810.KS",
+          "n": "Korea Aerospace",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "012450.KS",
+          "n": "Hanwha Aerospace",
+          "cls": "KOSPI"
+        },
+        {
+          "t": "079550.KS",
+          "n": "LIG Nex1",
+          "cls": "KOSPI"
+        }
       ]
     },
     "global_etf": {
@@ -97,35 +385,167 @@
       "_source": "norgate",
       "_benchmark": "SPY",
       "tickers": [
-        { "t": "EWJ", "n": "Japan", "cls": "Country ETF" },
-        { "t": "EWG", "n": "Germany", "cls": "Country ETF" },
-        { "t": "EWU", "n": "United Kingdom", "cls": "Country ETF" },
-        { "t": "EWQ", "n": "France", "cls": "Country ETF" },
-        { "t": "EWA", "n": "Australia", "cls": "Country ETF" },
-        { "t": "EWC", "n": "Canada", "cls": "Country ETF" },
-        { "t": "EWH", "n": "Hong Kong", "cls": "Country ETF" },
-        { "t": "EWW", "n": "Mexico", "cls": "Country ETF" },
-        { "t": "EWY", "n": "South Korea", "cls": "Country ETF" },
-        { "t": "EWT", "n": "Taiwan", "cls": "Country ETF" },
-        { "t": "EWZ", "n": "Brazil", "cls": "Country ETF" },
-        { "t": "EWS", "n": "Singapore", "cls": "Country ETF" },
-        { "t": "EWP", "n": "Spain", "cls": "Country ETF" },
-        { "t": "EWI", "n": "Italy", "cls": "Country ETF" },
-        { "t": "EWL", "n": "Switzerland", "cls": "Country ETF" },
-        { "t": "EWN", "n": "Netherlands", "cls": "Country ETF" },
-        { "t": "EWD", "n": "Sweden", "cls": "Country ETF" },
-        { "t": "EWM", "n": "Malaysia", "cls": "Country ETF" },
-        { "t": "EWO", "n": "Austria", "cls": "Country ETF" },
-        { "t": "EWK", "n": "Belgium", "cls": "Country ETF" },
-        { "t": "EZA", "n": "South Africa", "cls": "Country ETF" },
-        { "t": "FXI", "n": "China (large-cap)", "cls": "Country ETF" },
-        { "t": "INDA", "n": "India", "cls": "Country ETF" },
-        { "t": "TUR", "n": "Turkey", "cls": "Country ETF" },
-        { "t": "EIDO", "n": "Indonesia", "cls": "Country ETF" },
-        { "t": "THD", "n": "Thailand", "cls": "Country ETF" },
-        { "t": "EPOL", "n": "Poland", "cls": "Country ETF" },
-        { "t": "EPHE", "n": "Philippines", "cls": "Country ETF" },
-        { "t": "RSX-202212", "n": "Russia (delisted 2022)", "cls": "Country ETF (delisted)", "noFetch": "VanEck liquidated the fund; Yahoo no longer serves any history for it. Kept in the universe because the 2022 episode is real history the catalogue may reference again, but the fetch would fail on it forever." }
+        {
+          "t": "EWJ",
+          "n": "Japan",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWG",
+          "n": "Germany",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWU",
+          "n": "United Kingdom",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWQ",
+          "n": "France",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWA",
+          "n": "Australia",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWC",
+          "n": "Canada",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWH",
+          "n": "Hong Kong",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWW",
+          "n": "Mexico",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWY",
+          "n": "South Korea",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWT",
+          "n": "Taiwan",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWZ",
+          "n": "Brazil",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWS",
+          "n": "Singapore",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWP",
+          "n": "Spain",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWI",
+          "n": "Italy",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWL",
+          "n": "Switzerland",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWN",
+          "n": "Netherlands",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWD",
+          "n": "Sweden",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWM",
+          "n": "Malaysia",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWO",
+          "n": "Austria",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EWK",
+          "n": "Belgium",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EZA",
+          "n": "South Africa",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "FXI",
+          "n": "China (large-cap)",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "INDA",
+          "n": "India",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "TUR",
+          "n": "Turkey",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EIDO",
+          "n": "Indonesia",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "THD",
+          "n": "Thailand",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EPOL",
+          "n": "Poland",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "EPHE",
+          "n": "Philippines",
+          "cls": "Country ETF"
+        },
+        {
+          "t": "RSX-202212",
+          "n": "Russia (delisted 2022)",
+          "cls": "Country ETF (delisted)",
+          "noFetch": "VanEck liquidated the fund; Yahoo no longer serves any history for it. Kept in the universe because the 2022 episode is real history the catalogue may reference again, but the fetch would fail on it forever."
+        }
+      ]
+    },
+    "thrust": {
+      "_doc": "Targets for the volatility-thrust cards (Bitcoin + the Nasdaq-100 control). Registered here so the DAILY automated refresh keeps them current: these are daily-cadence signals with a live-instance panel, so stale data would be silently wrong — and unlike the monthly seasonals they are NOT eligible for carry-forward. NOTE the ticker must be Yahoo's real symbol: 'BTC-USD' is Bitcoin, whereas plain 'BTC' resolves to an unrelated ETF with only ~2 years of history (verified 2026-08-26).",
+      "tickers": [
+        {
+          "t": "BTC-USD",
+          "n": "Bitcoin",
+          "cls": "Crypto"
+        },
+        {
+          "t": "QQQ",
+          "n": "Nasdaq-100 ETF",
+          "cls": "US Equity"
+        }
       ]
     }
   },
