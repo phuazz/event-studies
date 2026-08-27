@@ -1,0 +1,103 @@
+name: Emit state contract
+
+# Publishes state.json — the live strong-Q2 instance, in the shape a private
+# consumer (the command centre) reads it in.
+#
+# WHY THIS EXISTS. That consumer used to reach INTO this repo for exact JSON
+# pointers in events_results.json from its own side, and it hard-codes the 2026
+# instance's anchor date while reporting the state as LIVE unconditionally. Both
+# are true today and neither will be forever. The emitter derives both from the
+# data — the anchor from the last episode, live from whether that episode's
+# 9-month forward return has resolved — so when the hard-coded copy goes stale
+# the two part company and the consumer's shadow comparison reports it. That
+# report is the alarm on the stale constant.
+#
+# WHY THE EMISSION IS AT THE REPO ROOT. This repo gitignores data/ entirely, so
+# an emission written there would never be committed and the consumer would read
+# nothing. It goes next to events_results.json, where committed results live.
+#
+# WHY A SEPARATE WORKFLOW. Nothing in this repo reads state.json, so it must
+# never be able to fail the catalogue refresh, and a separate workflow cannot.
+# It also keeps a Python step out of a Node pipeline.
+#
+# WHAT IS NOT EMITTED. The global-ETF breadth lead is a RECORDED GAP in the
+# consumer's contract: its records live under the gitignored private/ store and
+# there is no standing published state. It is deliberately not computed here —
+# the consumer renders a gap, which is honest, where a freshly computed value
+# would be a new number wearing the authority of a published one. Nothing under
+# private/ is read by this job; that store is paid, licensed third-party IP and
+# this repo is public.
+#
+# GUARD (CLAUDE.md: no unattended run without one). emit_state.py hard-asserts
+# every pointer, refuses a malformed anchor date, and refuses a missing 9-month
+# horizon rather than defaulting to LIVE — defaulting would report an open
+# window on the strength of a key that no longer exists. It REFUSES to write on
+# any failure, leaving the previous emission intact. tests/test_emit_state.py
+# covers the window arithmetic across a month boundary, a year boundary and a
+# leap-February clamp, every date checked against the calendar rather than
+# written from memory. NOTE the tests are a local guard, not a gate: this repo
+# has no CI test run. The enforcing check is the consumer's validator plus its
+# shadow comparison against its own independent extraction.
+
+on:
+  workflow_run:
+    workflows: ["Refresh event studies"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: emit-state-contract
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  emit:
+    # Only copy from a run that actually produced fresh results. After a failed
+    # refresh the previous emission stays, and the consumer's own staleness rule
+    # reports it — a stale emission is visible there, a wrong one is not.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The single dependency is deliberate. A 9-month window from a month-end
+      # anchor must land on the corresponding month-end (30 June 2026 ->
+      # 30 March 2027), which a day count does not do, and hand-rolled month
+      # arithmetic is exactly what the house rules forbid.
+      - name: Install date library
+        run: python -m pip install --quiet python-dateutil
+
+      - name: Emit the state contract
+        run: python scripts/emit_state.py
+
+      - name: Commit the emission
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "State Contract Emitter"
+          git add state.json
+          if git diff --cached --quiet; then
+            echo "State unchanged — nothing to commit."
+            exit 0
+          fi
+          git commit -m "Emit state contract $(date -u +'%Y-%m-%d %H:%M') UTC"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected on attempt $attempt — rebasing onto origin/main."
+            git pull --rebase --autostash origin main || exit 1
+          done
+          echo "::error::Could not push the state emission after 3 attempts."
+          exit 1

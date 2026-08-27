@@ -1,0 +1,21 @@
+{
+  "contract_version": "1",
+  "emitted_by": "event-studies",
+  "emitted_at": "2026-08-27T05:40:03+00:00",
+  "signals": {
+    "event_strong_q2": {
+      "as_of": "2026-08-27",
+      "state": "LIVE",
+      "value": 22,
+      "zone": "window 2026-06-30 → 2027-03-30",
+      "role": "view-only",
+      "horizon": "9m",
+      "evidence_grade": "informational",
+      "licence": "public",
+      "action_hint": "none",
+      "source_file": "events_results.json",
+      "computed_at": "2026-08-27T04:29:49.500Z",
+      "cadence": "daily"
+    }
+  }
+}
