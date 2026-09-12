@@ -162,10 +162,10 @@ function loadTicker(tk) {
 //
 // The guard is that carrying is permitted ONLY for a ticker named here. Any
 // other missing input is still fatal, because it means the fetch broke.
-const LOCAL_ONLY_TICKERS = new Set(['GSPC']);
+const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII']);
 
 function requiredTickers(ev) {
-  return [ev.target, ev.ratioTicker].filter(Boolean);
+  return [ev.target, ev.ratioTicker, ev.indicatorTicker].filter(Boolean);
 }
 
 function missingInputs(ev) {
@@ -439,6 +439,58 @@ function detectOversoldReversionInDowntrend(target, ev) {
     if (rsi[i] < lvl && rsi[i - 1] >= lvl && ac[i] < s[i]) triggers.push(i);
   }
   return { dates, ac, triggers, indicator: rsi, indicatorName: `RSI(${ev.rsiPeriod || 14})` };
+}
+
+// External-indicator level cross: a WEEKLY series (here the AAII Bull Ratio, a
+// public sentiment survey) is smoothed by `maWeeks` and crosses up through
+// `level` for the first time in `clusterWeeks` -> forward returns on a price
+// TARGET. Prompted by a SentimenTrader lead, rebuilt on OUR data with OUR base
+// rate; the vendor's prose and figures are not reproduced.
+//
+// CAUSALITY is the whole game here. A survey reading is consumed on its EFFECTIVE
+// date (when it was actually obtainable), never its survey date, and the entry is
+// the first target close STRICTLY AFTER that. The AAII release lags its Thursday
+// stamp by 1-4 days in the recent regime, so using the survey date would buy on
+// information nobody had.
+function detectIndicatorLevelCross(target, ind, ev) {
+  const ac = target.daily.map(b => b.ac);
+  const dates = target.daily.map(b => b.d);
+  const rows = (ind.weekly || []).filter(r => r.v != null);
+  const maW = ev.maWeeks || 20;
+  const level = ev.level != null ? ev.level : 48;
+  const clusterW = ev.clusterWeeks || 26;
+
+  // Trailing MA of the weekly series (causal: uses this row and the prior maW-1).
+  const ma = new Array(rows.length).fill(null);
+  for (let i = maW - 1; i < rows.length; i++) {
+    let s = 0;
+    for (let k = i - maW + 1; k <= i; k++) s += rows[k].v;
+    ma[i] = s / maW;
+  }
+  const hits = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (ma[i] == null || ma[i - 1] == null) continue;
+    if (ma[i] >= level && ma[i - 1] < level) {
+      if (!hits.length || (i - hits[hits.length - 1]) > clusterW) hits.push(i);
+    }
+  }
+  // Map each weekly signal to the first target close STRICTLY AFTER its effective date.
+  const triggers = [];
+  for (const i of hits) {
+    const eff = rows[i].eff || rows[i].d;
+    let lo = 0, hi = dates.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (dates[mid] <= eff) lo = mid + 1; else hi = mid; }
+    if (lo < dates.length) triggers.push(lo);
+  }
+  // Indicator plotted on the target's daily axis: the MA as known on each day
+  // (step function, no interpolation — it only updates weekly).
+  const indicator = new Array(dates.length).fill(null);
+  let p = 0, cur = null;
+  for (let d = 0; d < dates.length; d++) {
+    while (p < rows.length && (rows[p].eff || rows[p].d) <= dates[d]) { if (ma[p] != null) cur = +ma[p].toFixed(2); p++; }
+    indicator[d] = cur;
+  }
+  return { dates, ac, triggers, indicator, indicatorName: `${ev.indicatorName || 'indicator'} ${maW}w MA` };
 }
 
 // Volatility-normalised thrust: a ~1-week move measured in units of the
@@ -1271,6 +1323,8 @@ function main() {
       series = detectRsiOverboughtToMid(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_cross') {
       series = detectBreadthCross(spy, ev, universe);
+    } else if (ev.kind === 'indicator_level_cross') {
+      series = detectIndicatorLevelCross(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
     } else if (ev.kind === 'volatility_thrust') {
       series = detectVolatilityThrust(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_recovery_from_drawdown') {
