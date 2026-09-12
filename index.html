@@ -95,6 +95,15 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .ov-kv dd b{color:var(--t1);font-variant-numeric:tabular-nums}
 .ov-kv dd b.neg{color:var(--rd)}.ov-kv dd b.pos{color:var(--gn)}
 .ov-note{font-size:11px;color:var(--t3);text-align:center;margin-top:2px}
+/* Band-strip labels. The strip is a 300-wide viewBox with max-width:100%, so on a
+   phone it renders ~243px = scale 0.81 and every label shrinks WITH it: the old
+   9.5px attribute rendered at 7.7px effective, and even an 11px one at 8.9px. The
+   static check could not see it (SVG attributes are not font-size declarations).
+   Declared sizes below are therefore SCALE-COMPENSATED while the strip is shrinking,
+   and drop back to true sizes once the container is wide enough not to scale. */
+.strip-now{font-size:14px;font-weight:700}
+.strip-end{font-size:14px}
+@media(min-width:480px){.strip-now{font-size:11.5px}.strip-end{font-size:11px}}
 .ov-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--t3);margin:0 0 16px;align-items:center}
 .ov-legend span{display:inline-flex;align-items:center;gap:6px}
 .ov-legend i{display:inline-block}
@@ -416,7 +425,7 @@ function bandStrip(s){
   // keep the marker's own label inside the box even when the marker is at an edge
   const lx=Math.max(26,Math.min(W-26,mx));
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%">
-    <text x="${lx.toFixed(1)}" y="11" font-size="11" font-weight="700" fill="${mCol}" text-anchor="middle">${(s.mtm*100).toFixed(1)}% now</text>
+    <text x="${lx.toFixed(1)}" y="11" class="strip-now" fill="${mCol}" text-anchor="middle">${(s.mtm*100).toFixed(1)}% now</text>
     <line x1="${pad}" y1="${yMid}" x2="${W-pad}" y2="${yMid}" stroke="#E2E0DA" stroke-width="2"/>
     <rect x="${x(f.p10).toFixed(1)}" y="${yMid-7}" width="${(x(f.p90)-x(f.p10)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.18" rx="2"/>
     <rect x="${x(f.p25).toFixed(1)}" y="${yMid-7}" width="${(x(f.p75)-x(f.p25)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.30" rx="2"/>
@@ -424,8 +433,8 @@ function bandStrip(s){
     ${a<0&&b>0?`<line x1="${x(0).toFixed(1)}" y1="${yMid-11}" x2="${x(0).toFixed(1)}" y2="${yMid+11}" stroke="#9E9A92" stroke-width="1" stroke-dasharray="2 2"/>`:''}
     <line x1="${mx.toFixed(1)}" y1="15" x2="${mx.toFixed(1)}" y2="${yMid-7}" stroke="${mCol}" stroke-width="1"/>
     <circle cx="${mx.toFixed(1)}" cy="${yMid}" r="5.5" fill="${mCol}" stroke="#fff" stroke-width="1.5"/>
-    <text x="${x(f.p10).toFixed(1)}" y="${H-2}" font-size="9.5" fill="#6B6863" text-anchor="middle">${(f.p10*100).toFixed(0)}%</text>
-    <text x="${x(f.p90).toFixed(1)}" y="${H-2}" font-size="9.5" fill="#6B6863" text-anchor="middle">${(f.p90*100).toFixed(0)}%</text>
+    <text x="${x(f.p10).toFixed(1)}" y="${H-2}" class="strip-end" fill="#6B6863" text-anchor="middle">${(f.p10*100).toFixed(0)}%</text>
+    <text x="${x(f.p90).toFixed(1)}" y="${H-2}" class="strip-end" fill="#6B6863" text-anchor="middle">${(f.p90*100).toFixed(0)}%</text>
   </svg>`;
 }
 // One legend for the whole view — the strip is otherwise a puzzle.
