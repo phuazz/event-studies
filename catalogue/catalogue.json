@@ -7,6 +7,7 @@
     {
       "id": "gld-oversold-reversion-downtrend",
       "name": "GLD oversold washout below its 200-day SMA",
+      "summary": "Buy GLD when RSI(14) drops below 30 while it is already under its 200-day average. On our data the washout does NOT reliably bounce: 12 episodes, no horizon significant, and the 3-month edge is negative. Counter-trend by design and thin-sampled — context, not a signal.",
       "kind": "oversold_reversion_in_downtrend",
       "target": "GLD",
       "rsiPeriod": 14,
@@ -20,6 +21,7 @@
     {
       "id": "slv-oversold-reversion-downtrend",
       "name": "SLV oversold washout below its 200-day SMA",
+      "summary": "The same oversold-in-downtrend rule on silver, as the robustness check on the gold card. Higher beta means deeper washouts and larger but noisier snap-backs: 16 episodes, best cell +11.8pp at 6 months (p=0.08) — suggestive, not established, and the sample is thin.",
       "kind": "oversold_reversion_in_downtrend",
       "target": "SLV",
       "rsiPeriod": 14,
@@ -33,6 +35,7 @@
     {
       "id": "spx-strong-q2-9m-forward",
       "name": "S&P 500 strong 2nd quarter → 9-month forward",
+      "summary": "A strong second quarter (up in April, May and June, and/or +10% across the quarter) as a momentum-and-participation regime signal. 22 instances; the honest edge is the excess over the base rate, not the raw win rate — +5.3pp at 6 months (p=0.04). Signals cluster in secular bulls, so the effective sample is thinner than 22 suggests.",
       "kind": "seasonal_strong_quarter",
       "target": "GSPC",
       "cadence": "monthly",
@@ -52,6 +55,7 @@
     {
       "id": "spx-midterm-august-seasonal",
       "name": "S&P 500 from end-July of a midterm election year",
+      "summary": "Enter the S&P 500 at end-July of a US midterm election year. The full-sample 6-month edge looks strong (+7.6pp, p=0.01) but does NOT survive an era split: restricted to 1974 onward the headline collapses from +12.7% to +2.7%, roughly the base rate, and the same rule shows no edge on the Nasdaq. Analyst-capped out of ACT — a pre-1974 artefact, kept as context.",
       "kind": "seasonal_election_cycle",
       "target": "GSPC",
       "cadence": "monthly",
@@ -75,6 +79,7 @@
     {
       "id": "vol-thrust-btc",
       "name": "Bitcoin — 1-week volatility thrust (+2σ)",
+      "summary": "A ~1-week move measured in units of Bitcoin's own prior volatility, triggered at +2 sigma, causal by construction. The one signal here with a real short-horizon edge: 51 episodes, +6.4pp over its own base rate at 1 month (p=0.01). But a cross-asset test showed it is CRYPTO-ONLY — it vanishes in large-cap equities on the largest samples of the set. Read the Nasdaq-100 control card beside this one.",
       "kind": "volatility_thrust",
       "target": "BTC-USD",
       "retWindow": 5,
@@ -88,6 +93,7 @@
     {
       "id": "vol-thrust-qqq",
       "name": "Nasdaq-100 — 1-week volatility thrust (+2σ) [CONTROL]",
+      "summary": "A deliberate CONTROL, not a candidate. The identical volatility-thrust rule on a diversified equity index returns nothing (32 episodes, no positive edge). Its null IS the finding: it stops the Bitcoin card being read as evidence of a general market principle. Read the two together or neither.",
       "kind": "volatility_thrust",
       "target": "QQQ",
       "retWindow": 5,
@@ -101,6 +107,7 @@
     {
       "id": "aaii-bullratio-20w-cross",
       "name": "AAII Bull Ratio 20-week MA crosses 48 → Nasdaq 100",
+      "summary": "A contrarian retail-sentiment signal: the AAII Bull Ratio's 20-week average crossing above 48. We reproduce the vendor's headline almost exactly (12-month median +22.7% versus their 22.8%, 18 of 18 positive) — and it still says nothing, because the Nasdaq's UNCONDITIONAL 12-month median is +17.9%. That leaves an edge of +4.8pp at p=0.42, and the identical rule on the S&P 500 gives +0.5pp at p=0.90. Published as a live base-rate worked example, not a signal.",
       "kind": "indicator_level_cross",
       "target": "NDX",
       "indicatorTicker": "AAII",

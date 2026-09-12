@@ -1278,7 +1278,7 @@ function main() {
         // The horizon the THESIS is stated over (9 months here) — the denominator
         // the live monitor measures progress against. Distinct from the 1Y fan span.
         thesisHorizonDays: ev.thesisHorizonDays || null,
-        rationale: ev.rationale, definition: ev.definition,
+        rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the June month-end close (event-study convention).',
         ...res
       });
@@ -1297,7 +1297,7 @@ function main() {
         // (the gate scores on full-sample significance, which here is a pre-1974
         // artefact). Can only DOWNGRADE conviction, never raise it.
         gateOverride: ev.gateOverride || null, gateOverrideNote: ev.gateOverrideNote || null,
-        rationale: ev.rationale, definition: ev.definition,
+        rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
         entryNote: 'Forward return measured on the monthly price index from the end-of-July close of a midterm election year (event-study convention).',
         ...res
       });
@@ -1310,7 +1310,7 @@ function main() {
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly',
-        rationale: ev.rationale, definition: ev.definition,
+        rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
         entryNote: 'Forward returns measured on the target from the trigger month-end close (event-study convention).',
         ...res
       });
@@ -1343,7 +1343,7 @@ function main() {
     const res = analyseEvent(series, ev, regimeMap);
     out.events.push({
       id: ev.id, name: ev.name, kind: ev.kind,
-      target: ev.target || 'SPY', rationale: ev.rationale, definition: ev.definition,
+      target: ev.target || 'SPY', rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
       // The horizon the THESIS is stated over (e.g. a multi-week snap-back for a
       // washout) — the denominator the live monitor measures progress against,
       // NOT the 1Y fan span.
