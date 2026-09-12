@@ -152,6 +152,21 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px;min-wi
    scrolls sideways on a phone. Was a live bug: tables rendered 641-649px against
    a 390px viewport on every card, so the whole page scrolled horizontally. */
 .tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:6px}
+/* Status table: the scannable layer. Rows are navigation, so they get a pointer,
+   a hover state and a 44px row height on phones. */
+.stbl table{min-width:720px;font-size:13px}
+.stbl td,.stbl th{padding:9px 11px;vertical-align:middle}
+.stbl td.nm{font-weight:600;color:var(--t1);max-width:none}
+.stbl td.num,.stbl th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stbl td.dt{color:var(--t3);font-size:12.5px}
+.stbl td.st{white-space:nowrap;font-size:12.5px;color:var(--t2)}
+.stbl .pv{color:var(--t3);font-size:11.5px}
+.stbl tr.jump{cursor:pointer}
+.stbl tr.jump:hover{background:var(--bg-hover,#F0F0EA)}
+.stbl tr.is-live td.nm{box-shadow:inset 3px 0 0 var(--ac)}
+.stbl tr.is-dormant td.st{color:var(--t3)}
+.stbl .pos{color:var(--gn)} .stbl .neg{color:var(--rd)}
+@media(max-width:640px){.stbl td,.stbl th{padding:12px 10px}}
 th{text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
   color:var(--t3);border-bottom:1px solid var(--bd);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -638,6 +653,63 @@ function activeConditions(data){
   return `<div class="plabel" style="color:var(--t3)">Conditions in effect <span style="text-transform:none;font-weight:400;letter-spacing:0">— trigger holds but the last entry has matured; context only, not a live signal</span></div>${rows}`;
 }
 
+// Status table — the at-a-glance layer. Seven studies, one row each, readable
+// before any card is opened: what the gate says, how well evidenced it is, when it
+// last fired, and whether it is live right now. Summary before detail; the
+// severity-ordered live cards below remain the drill-down.
+//
+// The "strongest cell" column deliberately shows the LOWEST-p horizon whatever its
+// SIGN. On the Nasdaq-100 control that surfaces a negative edge, which is the point
+// of publishing it — a table that only ever showed favourable cells would be the
+// same selective reporting these studies exist to catch.
+function statusTable(data){
+  const asOf=(data.dailyWindow&&data.dailyWindow.end)||null;
+  const rows=data.events.map((ev,i)=>{
+    const c=credibility(ev), s=liveStatus(ev);
+    let best=null;
+    for(const h of (ev.byHorizon||[])){
+      if(!h.n||h.pValue==null||Number.isNaN(h.pValue)) continue;
+      if(!best||h.pValue<best.pValue) best=h;
+    }
+    // whole days between two ISO dates — one UTC subtraction, no calendar arithmetic
+    const d=(asOf&&ev.lastDate)?Math.floor((Date.parse(asOf)-Date.parse(ev.lastDate))/86400000):null;
+    return {ev,i,c,s,best,d};
+  });
+  const live=rows.filter(r=>r.s&&r.s.live);
+  const nLive=live.length;
+  const nAct=rows.filter(r=>r.c.action==='act').length;
+  // Ahead/behind its OWN expected path is a different axis from severity: severity
+  // asks whether an instance has broken out of its historical range, this asks
+  // whether the book is currently running with or against its own precedents.
+  const nAhead=live.filter(r=>r.s.expMed!=null&&r.s.mtm>=r.s.expMed).length;
+  const body=rows.map(r=>{
+    const ev=r.ev, b=r.best;
+    const edge=b?`${b.label} ${(b.edgeMedian*100>=0?'+':'')}${(b.edgeMedian*100).toFixed(1)}pp <span class="pv">p=${b.pValue.toFixed(2)}</span>`:'—';
+    const edgeCls=b?(b.edgeMedian>0?'pos':'neg'):'';
+    let state='—', stateCls='';
+    if(r.s&&r.s.live){
+      const ahead=r.s.expMed!=null&&r.s.mtm>=r.s.expMed;
+      state=`<b>live</b> · ${r.s.k}d in · <span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% expected`;
+      stateCls='is-live';
+    } else if(r.d!=null){
+      state = r.d<400 ? `dormant ${Math.round(r.d/30)} mo` : `dormant ${(r.d/365).toFixed(1)} yr`;
+      stateCls='is-dormant';
+    }
+    return `<tr class="jump ${stateCls}" data-i="${r.i}" title="${(ev.summary||'').replace(/"/g,'&quot;').slice(0,240)}">
+      <td class="nm">${ev.name}</td>
+      <td>${gate(r.c)}</td>
+      <td class="num">${ev.nEpisodes}</td>
+      <td class="num ${edgeCls}">${edge}</td>
+      <td class="num dt">${ev.lastDate||'—'}</td>
+      <td class="st">${state}</td></tr>`;
+  }).join('');
+  return `<div class="plabel">All studies at a glance</div>
+    <div class="ov-meta" style="margin:0 0 8px"><b>${nLive} of ${data.events.length}</b> inside a forward window, <b>${nAhead}</b> of those tracking ahead of ${nAhead===1?'its':'their'} own expected path · ${nAct} act-gated. The gate is a mechanical score, not a recommendation — several studies here are published as context or as an explicit control, so open a study for its verdict before reading anything into the badge. Click any row.</div>
+    <div class="tscroll stbl"><table>
+      <thead><tr><th>Study</th><th>Gate</th><th class="num">Eps</th><th class="num">Strongest cell</th><th class="num">Last trigger</th><th>State</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+}
+
 function renderOverview(data){
   const age=dataAgeDays(data), stale=age!=null&&age>3;
   const asOf=(data.dailyWindow&&data.dailyWindow.end)||'?';
@@ -649,7 +721,7 @@ function renderOverview(data){
 
   const rows=data.events.map(ev=>({ev,s:liveStatus(ev),c:credibility(ev)})).filter(r=>r.s&&r.s.live);
   if(!rows.length) return `<div class="card"><h2>Overview</h2>${fresh}
-    <div class="ov-state">No signal is inside its forward window. <b>Nothing to watch.</b></div>${activeConditions(data)}${disc}</div>`;
+    <div class="ov-state">No signal is inside its forward window. <b>Nothing to watch.</b></div>${statusTable(data)}${activeConditions(data)}${disc}</div>`;
 
   rows.forEach(r=>r.sev=severityOf(r.s));
   rows.sort((a,b)=>a.sev.rank-b.sev.rank); // worst first — the page's one opinion
@@ -662,6 +734,8 @@ function renderOverview(data){
 
   return `<div class="card"><h2>Overview</h2>${fresh}
     <div class="ov-state">${state}</div>
+    ${statusTable(data)}
+    <div class="plabel">Live instances — worst first</div>
     ${stripLegend()}
     ${loud.map(ovCard).join('')}
     ${quiet.length?`<div class="plabel">Tracking normally</div>${quiet.map(ovCard).join('')}`:''}
@@ -681,7 +755,7 @@ function paint(){
   const pills=DATA.events.map((e,i)=>`<div class="pill ${i===current?'on':''}" data-i="${i}">${gateDot(credibility(e))}${e.name} (${e.nEpisodes})</div>`).join('');
   const nav=views+`<div class="plabel">Studies</div><div class="pills">${pills}</div>`;
   root.innerHTML=(current===-1?'':summaryCards())+nav+(current===-1?renderOverview(DATA):renderEvent(DATA.events[current],DATA));
-  root.querySelectorAll('.pill,.view').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();});
+  root.querySelectorAll('.pill,.view,tr.jump').forEach(p=>p.onclick=()=>{current=+p.dataset.i;paint();window.scrollTo({top:0,behavior:'instant'});});
   if(current!==-1) wireFan();
 }
 
