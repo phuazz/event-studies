@@ -30,7 +30,16 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .pill.on{background:var(--t1);color:#fff;border-color:var(--t1)}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:22px 24px;margin-bottom:20px}
 .card h2{font-size:20px;font-weight:700;margin-bottom:10px}
-.kv{font-size:14px;color:var(--t2);margin:6px 0;line-height:1.6;max-width:57ch}  /* cap the reading measure: prose ran to ~142 characters per line at 1280px */
+.kv{font-size:14px;color:var(--t2);margin:6px 0;line-height:1.6;max-width:64ch}
+/* A 1050px card is far too wide for a single prose column: capped to a readable
+   measure the text filled barely half of it and the rest read as dead space, but
+   letting it run full width would be ~140 characters per line. So the two prose
+   blocks sit side by side on a wide card — the column IS the measure, the width is
+   used, and each still reads at ~70 characters. They stack below 860px. */
+.dualcol{display:grid;grid-template-columns:1fr 1fr;gap:2px 34px;align-items:start}
+.dualcol .kv{max-width:none}
+@media(max-width:860px){.dualcol{grid-template-columns:1fr;gap:0}
+  .dualcol .kv{max-width:64ch}}  /* cap the reading measure: prose ran to ~142 characters per line at 1280px */
 .kv b{color:var(--t1);font-weight:600}
 .tags{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
 .tag{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--sa);color:var(--t2)}
@@ -121,7 +130,7 @@ details.disc div{margin-top:9px;line-height:1.75}
    and keeps the full text one click away, so the honest detail is retained without
    being the first thing a reader has to wade through. */
 details.disc.rat{margin-top:10px;font-size:13.5px;color:var(--t2)}
-details.disc.rat div{margin-top:10px;line-height:1.72;max-width:59ch}
+details.disc.rat div{margin-top:10px;line-height:1.72;max-width:78ch;column-gap:34px}
 @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}
   /* Bars are a fixed 26px each and a column holds two of them; on a phone the
      flex column compresses to ~41px, so 26+5+26 overran the viewport by 2px and
@@ -518,8 +527,10 @@ function renderEvent(ev,data){
   const cred=credibility(ev);
   return `<div class="card">
     <h2>${ev.name} ${gate(cred)}</h2>
-    <div class="kv"><b>Definition.</b> ${ev.definition||''}</div>
-    <div class="kv"><b>In short.</b> ${ev.summary||ev.rationale||''}</div>
+    <div class="dualcol">
+      <div class="kv"><b>Definition.</b> ${ev.definition||''}</div>
+      <div class="kv"><b>In short.</b> ${ev.summary||ev.rationale||''}</div>
+    </div>
     ${ev.summary&&ev.rationale?`<details class="disc rat"><summary>Full rationale, method and caveats</summary><div>${ev.rationale}</div></details>`:''}
     <div class="kv dim">Target: ${ev.target} · forward return from the trigger-day close (event-study convention).</div>
     <div class="tags">
