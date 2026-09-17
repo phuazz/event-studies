@@ -47,20 +47,31 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .sec-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);
   margin:24px 0 12px}
 /* chart */
-.chart{display:flex;align-items:flex-end;gap:18px;height:230px;padding:10px 4px 0;border-bottom:1px solid var(--bd);margin-bottom:6px}
-.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative}
-.bars{display:flex;align-items:flex-end;gap:5px;height:100%;width:100%;justify-content:center}
-.bar{width:26px;border-radius:3px 3px 0 0;position:relative}
+/* Grouped bars on a TRUE ZERO BASELINE. `--ph` (plot height) and `--zy` (pixels from
+   the top of the plot down to the 0% line) are set inline by chart(); the dashed zero
+   rule only renders when a card actually has negative values, so an all-positive card
+   is pixel-identical to the pre-2026-09-17 layout. */
+.chart{display:flex;align-items:flex-end;gap:18px;padding:10px 4px 0;border-bottom:1px solid var(--bd);margin-bottom:6px;position:relative}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
+.bars{display:flex;gap:5px;width:100%;justify-content:center;height:var(--ph)}
+.chart.haszero .bars{margin-bottom:20px}
+.chart.haszero::after{content:'';position:absolute;left:4px;right:4px;top:calc(10px + var(--zy));
+  border-top:1px dashed var(--t3);opacity:.55;pointer-events:none}
+.slot{position:relative;width:26px;height:var(--ph)}
+.bar{position:absolute;left:0;width:100%;border-radius:3px 3px 0 0}
+.bar.dn{border-radius:0 0 3px 3px}
 .bar.cond{background:var(--ac)}
 .bar.cond.neg{background:var(--rd)}
 .bar.base{background:transparent;border:1.5px solid var(--t3)}
 .bar .val{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;
   white-space:nowrap;color:var(--t2)}
+.bar .val.below{top:auto;bottom:-19px}
 .xlab{font-size:12px;color:var(--t3);margin-top:8px;font-weight:600}
 .legend{display:flex;gap:18px;font-size:12px;color:var(--t3);margin:10px 0 4px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:13px;height:13px;border-radius:3px;display:inline-block}
 .sw.cond{background:var(--ac)}.sw.base{border:1.5px solid var(--t3)}
+.sw.zero{height:0;border-top:1px dashed var(--t3);border-radius:0;align-self:center}
 /* kpi cards + credibility gate + live panel (adapted from the Signal Tracker) */
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
 .kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px}
@@ -139,7 +150,7 @@ details.disc.rat div{margin-top:10px;line-height:1.72;max-width:78ch;column-gap:
      the whole page scrolled sideways. Shrink the pair to fit the column. */
   .chart{gap:10px;padding:10px 2px 0}
   .bars{gap:4px}
-  .bar{width:17px}
+  .bar,.slot{width:17px}
 }
 /* fan */
 .fan-wrap{position:relative}
@@ -179,7 +190,7 @@ tr:hover td{background:var(--sa)}
 .dim{color:var(--t3)}
 .err{background:var(--rdb);border:1px solid #FECACA;color:var(--rd);padding:16px 20px;border-radius:var(--r)}
 .foot{font-size:12px;color:var(--t3);margin-top:24px;text-align:center}
-@media(max-width:640px){.chart{gap:8px}.bar{width:18px}.bar.base{width:18px}}
+@media(max-width:640px){.chart{gap:8px}.slot{width:18px}.bar,.bar.base{width:100%}}
 </style>
 </head>
 <body>
@@ -315,24 +326,45 @@ function wireFan(){
   svg.addEventListener('mouseleave',()=>{guide.style.visibility='hidden';dot.style.visibility='hidden';tip.style.display='none';});
 }
 
+// Grouped bars: conditional median (solid) vs unconditional baseline (outline), per
+// horizon, on a TRUE ZERO BASELINE.
+//
+// Until 2026-09-17 this drew Math.abs(v) upward from a common floor, so the sign was
+// carried ONLY by colour. On an all-positive card that is harmless, which is why it
+// survived seven cards. On the first card whose medians are negative it INVERTED the
+// comparison the chart exists to make: at 1M a conditional of -3.30% was drawn as a
+// taller bar than the +1.33% baseline beside it, so the eye read the conditional as
+// the bigger number when it is in fact 4.6pp BELOW the base rate. Reported from the
+// rendered page, not the source — which is the only way this class of fault shows up.
+//
+// Bars now sit above or below a shared zero rule. Where a card has no negative value
+// the geometry is unchanged: lo pins to 0, zeroY lands on the floor, and every bar
+// keeps exactly the height it had.
 function chart(ev){
-  // grouped bars: conditional median (solid) vs baseline median (outline), per horizon
   const rows=ev.byHorizon;
   const vals=rows.flatMap(r=>[r.median,r.baseMedian]).filter(v=>v!=null&&!Number.isNaN(v));
-  const maxAbs=Math.max(0.01,...vals.map(Math.abs));
-  const H=190; // px usable height each side of zero -> we use single-direction scaling from a mid baseline
-  const cols=rows.map(r=>{
-    const cv=r.median==null?0:r.median, bv=r.baseMedian==null?0:r.baseMedian;
-    const ch=Math.abs(cv)/maxAbs*H, bh=Math.abs(bv)/maxAbs*H;
-    return `<div class="col"><div class="bars">
-      <div class="bar cond ${cv<0?'neg':''}" style="height:${ch||1}px"><span class="val">${pctf(cv,1)}%</span></div>
-      <div class="bar base" style="height:${bh||1}px"></div>
-    </div><div class="xlab">${r.label}</div></div>`;
-  }).join('');
+  const hi=Math.max(0,...vals), lo=Math.min(0,...vals);
+  const span=Math.max(1e-9,hi-lo);
+  const PH=190;                              // plot height in px; mirrored by --ph
+  const y=v=>(hi-v)/span*PH;                 // px from the top of the plot area
+  const zeroY=y(0), hasNeg=lo<0;
+  const bar=(v,cls,label)=>{
+    const val=(v==null||Number.isNaN(v))?0:v;
+    const yv=y(val), top=Math.min(yv,zeroY), h=Math.max(1,Math.abs(yv-zeroY)), dn=val<0;
+    return `<div class="slot"><div class="bar ${cls}${dn?' dn':''}" `
+      + `style="top:${top.toFixed(1)}px;height:${h.toFixed(1)}px">`
+      + (label?`<span class="val${dn?' below':''}">${pctf(val,1)}%</span>`:'')
+      + `</div></div>`;
+  };
+  const cols=rows.map(r=>`<div class="col"><div class="bars">`
+    + bar(r.median,'cond'+(((r.median||0)<0)?' neg':''),true)
+    + bar(r.baseMedian,'base',false)
+    + `</div><div class="xlab">${r.label}</div></div>`).join('');
   return `<div class="legend">
       <span><i class="sw cond"></i> Conditional median</span>
       <span><i class="sw base"></i> Unconditional baseline</span>
-    </div><div class="chart">${cols}</div>`;
+      ${hasNeg?'<span><i class="sw zero"></i> 0%</span>':''}
+    </div><div class="chart${hasNeg?' haszero':''}" style="--ph:${PH}px;--zy:${zeroY.toFixed(1)}px">${cols}</div>`;
 }
 
 function statsTable(ev){
@@ -707,13 +739,15 @@ function statusTable(data){
   const nAhead=live.filter(withDir).length;
   const body=rows.map(r=>{
     const ev=r.ev, b=r.best;
-    // Green marks an edge in the study's DECLARED direction, not a positive number —
-    // so a card scored on a FALL shows a negative edge in green. That is consistent
-    // across the table (green = the study found what it predicted) but reads as "good
-    // news" to a scanning eye, so a down card labels itself in the cell.
-    const dtag=r.c.dir<0?`<span class="dtag" title="This study predicts a FALL, so a negative edge is the finding">predicts a fall</span> `:'';
+    // COLOUR ENCODES THE SIGN OF THE NUMBER, and direction is carried by the tag.
+    // This column briefly coloured by the DECLARED direction instead, so a down card's
+    // -4.6pp edge rendered green here while the very same figure rendered red in the
+    // card's own Edge column via sgn(). One number, two colours, one page. The tag
+    // says "predicts a fall" in words, which is unambiguous in a way a colour
+    // convention the reader has to infer is not.
+    const dtag=r.c.dir<0?`<span class="dtag" title="This study predicts a FALL, so a negative edge is the finding, not a failure">predicts a fall</span> `:'';
     const edge=b?`${dtag}${b.label} ${(b.edgeMedian*100>=0?'+':'')}${(b.edgeMedian*100).toFixed(1)}pp <span class="pv">p=${b.pValue.toFixed(2)}</span>`:'—';
-    const edgeCls=b?(b.edgeMedian*r.c.dir>0?'pos':'neg'):'';
+    const edgeCls=b?sgn(b.edgeMedian):'';
     let state='—', stateCls='';
     if(r.s&&r.s.live){
       const ahead=withDir(r);
