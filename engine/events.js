@@ -162,7 +162,7 @@ function loadTicker(tk) {
 //
 // The guard is that carrying is permitted ONLY for a ticker named here. Any
 // other missing input is still fatal, because it means the fetch broke.
-const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII']);
+const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII', 'USPRIME']);
 
 function requiredTickers(ev) {
   return [ev.target, ev.ratioTicker, ev.indicatorTicker].filter(Boolean);
@@ -491,6 +491,74 @@ function detectIndicatorLevelCross(target, ind, ev) {
     indicator[d] = cur;
   }
   return { dates, ac, triggers, indicator, indicatorName: `${ev.indicatorName || 'indicator'} ${maW}w MA` };
+}
+
+// First step UP in an externally-supplied DAILY rate series after a long pause ->
+// forward returns on a price TARGET. Built for "the first policy rate hike of a
+// tightening cycle", where the whole problem is that the event list is normally
+// hand-curated.
+//
+// WHY THIS EXISTS. The vendor lead that prompted the card supplied five first-hike
+// dates with no stated rule admitting a date. Inside its own 1994-2026 window this
+// mechanical rule finds SIX, so the omission was doing work: adding the one it left
+// out (1997) took the gold leg's 6-month edge from +6.3pp to +1.5pp. A curated event
+// list cannot be audited, so the detector replaces it rather than consuming it.
+//
+// WHY THE PRIME RATE. It steps in discrete increments that track the fed funds TARGET,
+// is publicly observable at the time, and needs no judgement. The EFFECTIVE fed funds
+// rate was tried first and is unusable — a market rate that wanders daily, giving
+// 1,520 step-ups and recovering only three cycle starts against prime's six of six.
+//
+// CAUSALITY. Norgate stamps prime by its EFFECTIVE date, which lags the FOMC
+// announcement by one session (verified: March 2022 announced the 16th, prime prints
+// the 17th). Entry at the step-date close is therefore causal — the decision had been
+// public since the previous afternoon. The one-session-later variant costs about
+// 1.4pp of the 1M edge, which says a real part of the effect sits in the first
+// session; that sensitivity is reported on the card rather than smoothed away.
+//
+// The window is truncated to `startDate` for BOTH the triggers and the price series,
+// so the unconditional base rate the analyser computes is drawn from the same window
+// as the events. Comparing 1994+ events against a 1949+ base rate would not be
+// like-for-like.
+function detectIndicatorFirstStep(target, ind, ev) {
+  const stepMin = ev.stepMin != null ? ev.stepMin : 0.10;
+  const pauseBars = ev.pauseBars || 252;
+  const startDate = ev.startDate || null;
+  const entryLag = ev.entryLag != null ? ev.entryLag : 0;
+
+  const bars = target.daily.filter(b => !startDate || b.d >= startDate);
+  const ac = bars.map(b => b.ac);
+  const dates = bars.map(b => b.d);
+  const rows = (ind.daily || []).filter(r => r.v != null);
+
+  // A step resets the pause clock whether or not it is KEPT as a cycle start —
+  // otherwise a second hike three months later would qualify as a fresh cycle.
+  const hits = [];
+  let last = -Infinity;
+  for (let i = 1; i < rows.length; i++) {
+    if (!(rows[i].v - rows[i - 1].v > stepMin)) continue;
+    if (i - last > pauseBars) hits.push(i);
+    last = i;
+  }
+  // Map each step to the first target close ON OR AFTER its date (plus entryLag).
+  const triggers = [];
+  for (const i of hits) {
+    const d = rows[i].d;
+    if (startDate && d < startDate) continue;
+    let lo = 0, hi = dates.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (dates[mid] < d) lo = mid + 1; else hi = mid; }
+    const j = lo + entryLag;
+    if (j < dates.length) triggers.push(j);
+  }
+  // Indicator on the target's daily axis: the rate as known on each day (step
+  // function — it only changes when the banks reprice, never interpolated).
+  const indicator = new Array(dates.length).fill(null);
+  let p = 0, cur = null;
+  for (let d = 0; d < dates.length; d++) {
+    while (p < rows.length && rows[p].d <= dates[d]) { cur = rows[p].v; p++; }
+    indicator[d] = cur;
+  }
+  return { dates, ac, triggers, indicator, indicatorName: ev.indicatorName || 'policy rate' };
 }
 
 // Volatility-normalised thrust: a ~1-week move measured in units of the
@@ -1274,7 +1342,7 @@ function main() {
       const res = analyseSeasonalStrongQuarter(target, ev);
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
-        target: ev.target, cadence: 'monthly',
+        target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
         // The horizon the THESIS is stated over (9 months here) — the denominator
         // the live monitor measures progress against. Distinct from the 1Y fan span.
         thesisHorizonDays: ev.thesisHorizonDays || null,
@@ -1291,7 +1359,7 @@ function main() {
       const res = analyseSeasonalElectionCycle(target, ev);
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
-        target: ev.target, cadence: 'monthly',
+        target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
         thesisHorizonDays: ev.thesisHorizonDays || null,
         // Explicit, logged analyst override of the mechanical credibility gate
         // (the gate scores on full-sample significance, which here is a pre-1974
@@ -1309,7 +1377,7 @@ function main() {
       const res = analyseRatioExtreme(loadTicker(ev.ratioTicker), loadTicker(ev.target), ev);
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
-        target: ev.target, cadence: 'monthly',
+        target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
         rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
         entryNote: 'Forward returns measured on the target from the trigger month-end close (event-study convention).',
         ...res
@@ -1325,6 +1393,8 @@ function main() {
       series = detectBreadthCross(spy, ev, universe);
     } else if (ev.kind === 'indicator_level_cross') {
       series = detectIndicatorLevelCross(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
+    } else if (ev.kind === 'indicator_first_step_after_pause') {
+      series = detectIndicatorFirstStep(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
     } else if (ev.kind === 'volatility_thrust') {
       series = detectVolatilityThrust(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_recovery_from_drawdown') {
@@ -1344,6 +1414,12 @@ function main() {
     out.events.push({
       id: ev.id, name: ev.name, kind: ev.kind,
       target: ev.target || 'SPY', rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
+      // Which way the study says the target moves, declared in the CATALOGUE before
+      // the numbers exist. The credibility gate scores significance and consistency
+      // against it; inferring it from the results would let the gate keep whichever
+      // sign scored better, doubling the multiple-testing surface of every card.
+      direction: ev.direction === 'down' ? 'down' : 'up',
+      gateOverride: ev.gateOverride || null, gateOverrideNote: ev.gateOverrideNote || null,
       // The horizon the THESIS is stated over (e.g. a multi-week snap-back for a
       // washout) — the denominator the live monitor measures progress against,
       // NOT the 1Y fan span.
