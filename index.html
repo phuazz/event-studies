@@ -169,10 +169,17 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px;min-wi
    a hover state and a 44px row height on phones. */
 .stbl table{min-width:720px;font-size:13px}
 .stbl td,.stbl th{padding:9px 11px;vertical-align:middle}
-.stbl td.nm{font-weight:600;color:var(--t1);max-width:none}
+/* The two prose columns wrap; the four numeric/date columns stay on one line. Held
+   on one line, Study (357px) and State (244px) took the table to 1080px inside a
+   994px card, so the at-a-glance layer scrolled sideways even at 1280px. */
+.stbl td.nm{font-weight:600;color:var(--t1);max-width:30ch;white-space:normal;line-height:1.35}
 .stbl td.num,.stbl th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .stbl td.dt{color:var(--t3);font-size:12.5px}
-.stbl td.st{white-space:nowrap;font-size:12.5px;color:var(--t2)}
+/* State reads as two stacked lines — what it is doing, then how it is tracking —
+   so the cell wraps where the meaning breaks rather than wherever the box ends. */
+.stbl td.st{white-space:nowrap;font-size:12.5px;color:var(--t2);line-height:1.45}
+.stbl td .ln{display:block}
+.stbl td.nm .ln{margin-top:3px}
 .stbl .pv{color:var(--t3);font-size:11.5px}
 .stbl tr.jump{cursor:pointer}
 .stbl tr.jump:hover{background:var(--bg-hover,#F0F0EA)}
@@ -745,20 +752,24 @@ function statusTable(data){
     // card's own Edge column via sgn(). One number, two colours, one page. The tag
     // says "predicts a fall" in words, which is unambiguous in a way a colour
     // convention the reader has to infer is not.
-    const dtag=r.c.dir<0?`<span class="dtag" title="This study predicts a FALL, so a negative edge is the finding, not a failure">predicts a fall</span> `:'';
-    const edge=b?`${dtag}${b.label} ${(b.edgeMedian*100>=0?'+':'')}${(b.edgeMedian*100).toFixed(1)}pp <span class="pv">p=${b.pValue.toFixed(2)}</span>`:'—';
+    //
+    // The tag sits under the STUDY NAME, not beside the figure. One down card widened
+    // the nowrap Strongest cell column for all eight rows; the name column wraps, so
+    // the same words cost nothing horizontally there.
+    const dtag=r.c.dir<0?`<span class="dtag" title="This study predicts a FALL, so a negative edge is the finding, not a failure">predicts a fall</span>`:'';
+    const edge=b?`${b.label} ${(b.edgeMedian*100>=0?'+':'')}${(b.edgeMedian*100).toFixed(1)}pp <span class="pv">p=${b.pValue.toFixed(2)}</span>`:'—';
     const edgeCls=b?sgn(b.edgeMedian):'';
     let state='—', stateCls='';
     if(r.s&&r.s.live){
       const ahead=withDir(r);
-      state=`<b>live</b> · ${r.s.k}d in · <span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% expected`;
+      state=`<span class="ln"><b>live</b> · ${r.s.k}d in</span><span class="ln"><span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% expected</span>`;
       stateCls='is-live';
     } else if(r.d!=null){
       state = r.d<400 ? `dormant ${Math.round(r.d/30)} mo` : `dormant ${(r.d/365).toFixed(1)} yr`;
       stateCls='is-dormant';
     }
     return `<tr class="jump ${stateCls}" data-i="${r.i}" title="${(ev.summary||'').replace(/"/g,'&quot;').slice(0,240)}">
-      <td class="nm">${ev.name}</td>
+      <td class="nm">${ev.name}${dtag?`<span class="ln">${dtag}</span>`:''}</td>
       <td>${gate(r.c)}</td>
       <td class="num">${ev.nEpisodes}</td>
       <td class="num ${edgeCls}">${edge}</td>
