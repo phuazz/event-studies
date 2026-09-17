@@ -186,7 +186,43 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px;min-wi
 .stbl tr.is-live td.nm{box-shadow:inset 3px 0 0 var(--ac)}
 .stbl tr.is-dormant td.st{color:var(--t3)}
 .stbl .pos{color:var(--gn)} .stbl .neg{color:var(--rd)}
-@media(max-width:640px){.stbl td,.stbl th{padding:12px 10px}}
+/* Tablet: six columns need 679px of natural width against 647px of card at 768px,
+   so one has to go. Last trigger is the one the State column already implies
+   ("dormant 4.4 yr") and the expanded card states outright. */
+@media(max-width:860px){
+  .stbl table{min-width:0}
+  .stbl th.dt,.stbl td.dt{display:none}
+}
+/* Phone: the four nowrap columns alone need 599px against 269px of card, so no
+   font size saves a six-column table here — the contained scroll it used to get
+   was 451px wide, i.e. the reader swiped for two thirds of every row. Each row
+   becomes a block instead: name, a meta line, then the two figures.
+   700px, not the house 640px: the five-column tablet layout needs 577px and the
+   card gives it 554px at 660px viewport, so 640 left a band that still scrolled. */
+@media(max-width:700px){
+  .stbl td,.stbl th{padding:12px 10px}
+  .stbl table,.stbl tbody,.stbl td{display:block}
+  .stbl thead{display:none}
+  /* The row is a flex block so the cells can be reordered: gate, n and the trigger
+     date read as one meta line, which DOM order alone cannot give without changing
+     the column order the wide layout needs. */
+  .stbl tr{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;
+    padding:12px 2px;border-bottom:1px solid var(--bl)}
+  .stbl tbody tr:last-child{border-bottom:0}
+  .stbl td,.stbl td.num{border:0;padding:0;text-align:left;white-space:normal}
+  .stbl td.nm{max-width:none;font-size:14px;padding-bottom:6px;width:100%;order:1}
+  .stbl td.gt{order:2} .stbl td.eps{order:3}
+  .stbl td.dt{display:block;order:4}  /* back on, the meta line has room for it */
+  .stbl td.ec{width:100%;order:5} .stbl td.st{width:100%;order:6}
+  /* the live marker moves from the name cell to the whole block */
+  .stbl tr.is-live td.nm{box-shadow:none}
+  .stbl tr.is-live{border-left:3px solid var(--ac);padding-left:10px}
+  .stbl td.eps::before{content:'n=';color:var(--t3)}
+  .stbl td.ec{padding-top:7px}
+  .stbl td.ec::before{content:'Strongest ';font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.4px;color:var(--t3)}
+  .stbl td.st{padding-top:5px}
+}
 th{text-align:right;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
   color:var(--t3);border-bottom:1px solid var(--bd);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -770,16 +806,16 @@ function statusTable(data){
     }
     return `<tr class="jump ${stateCls}" data-i="${r.i}" title="${(ev.summary||'').replace(/"/g,'&quot;').slice(0,240)}">
       <td class="nm">${ev.name}${dtag?`<span class="ln">${dtag}</span>`:''}</td>
-      <td>${gate(r.c)}</td>
-      <td class="num">${ev.nEpisodes}</td>
-      <td class="num ${edgeCls}">${edge}</td>
+      <td class="gt">${gate(r.c)}</td>
+      <td class="num eps">${ev.nEpisodes}</td>
+      <td class="num ec ${edgeCls}">${edge}</td>
       <td class="num dt">${ev.lastDate||'—'}</td>
       <td class="st">${state}</td></tr>`;
   }).join('');
   return `<div class="plabel">All studies at a glance</div>
     <div class="ov-meta" style="margin:0 0 8px"><b>${nLive} of ${data.events.length}</b> inside a forward window, <b>${nAhead}</b> of those tracking ahead of ${nAhead===1?'its':'their'} own expected path · ${nAct} act-gated. The gate is a mechanical score, not a recommendation — several studies here are published as context or as an explicit control, so open a study for its verdict before reading anything into the badge. Click any row.</div>
     <div class="tscroll stbl"><table>
-      <thead><tr><th>Study</th><th>Gate</th><th class="num">Eps</th><th class="num">Strongest cell</th><th class="num">Last trigger</th><th>State</th></tr></thead>
+      <thead><tr><th>Study</th><th>Gate</th><th class="num">Eps</th><th class="num">Strongest cell</th><th class="num dt">Last trigger</th><th>State</th></tr></thead>
       <tbody>${body}</tbody></table></div>`;
 }
 
