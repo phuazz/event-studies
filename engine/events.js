@@ -1451,7 +1451,14 @@ function main() {
       console.log(`  ${c.id} — missing ${c.missing.join(', ')}` +
                   `${c.computedAt ? `, last computed ${c.computedAt}` : ', NO prior result'}`);
     }
-    console.log('  Run scripts/fetch_gspc_norgate.py locally, then re-run, to recompute these.');
+    // Name the script for the ticker that is actually missing. The hint was hard-coded
+    // to the GSPC fetcher back when GSPC was the only locally-sourced input; it now
+    // sends you to the wrong script for NDX, AAII or USPRIME.
+    const FETCHER = { GSPC: 'scripts/fetch_gspc_norgate.py', NDX: 'scripts/fetch_aaii_ndx.py',
+                      AAII: 'scripts/fetch_aaii_ndx.py', USPRIME: 'scripts/fetch_usprime.py' };
+    const needed = [...new Set(out.carriedForward.flatMap(c => c.missing)
+      .map(tk => FETCHER[tk]).filter(Boolean))];
+    console.log(`  Run ${needed.join(' and ') || 'the relevant fetch script'} locally, then re-run, to recompute these.`);
   }
 
   fs.writeFileSync(OUT, JSON.stringify(out));
