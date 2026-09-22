@@ -460,8 +460,21 @@ function epTable(ev){
 function credibility(ev){
   const bh=ev.byHorizon||[], at=h=>bh.find(r=>r.label===h)||{};
   const dir = ev.direction==='down' ? -1 : 1;
+  // SCORING METRIC (added 2026-09-22). Some studies carry no median effect and a large
+  // DISTRIBUTIONAL one — fewer positive outcomes, deeper drawdowns. Scoring those on the
+  // median reads them as null, which is the trap the discipline notes name: a
+  // median-scored gate is blind to a tail rule.
+  //
+  // `ev.scoreOn` ('median' default | 'hitrate') is declared in the CATALOGUE before the
+  // numbers exist, for exactly the reason `direction` is. Letting the gate keep whichever
+  // of the two statistics scored better would be METRIC-FISHING — the same failure as
+  // sign-fishing, and it would double the multiple-testing surface a second time.
+  const useHit = ev.scoreOn==='hitrate';
+  const edgeOf = r => useHit ? r.edgeHit : r.edgeMedian;
+  const pOf    = r => useHit ? r.pValueHit : r.pValue;
   const sample = ev.nEpisodes>=12?2:ev.nEpisodes>=6?1:0;
-  let bestP=1; for(const r of bh){ if(r.edgeMedian*dir>0 && r.pValue!=null && !Number.isNaN(r.pValue) && r.pValue<bestP) bestP=r.pValue; }
+  let bestP=1; for(const r of bh){ const e=edgeOf(r), p=pOf(r);
+    if(e!=null && e*dir>0 && p!=null && !Number.isNaN(p) && p<bestP) bestP=p; }
   const signif = bestP<0.05?2:bestP<0.10?1:0;
   // MFE/MAE are stored in raw sign terms (MFE up, MAE down). For a DOWN study the
   // FAVOURABLE excursion is the downside one, so the pair swaps and both are re-signed
@@ -472,7 +485,7 @@ function credibility(ev){
   const tail = (fav!=null&&adv!=null&&adv<0)?(fav>-adv*1.3?2:fav>-adv?1:0):(fav>0?1:0);
   const on=ev.regimeSplit?.on||0, off=ev.regimeSplit?.off||0;
   const regime = Math.min(on,off)>=2?2:Math.min(on,off)>=1?1:0;
-  const pos = bh.length?bh.filter(r=>r.edgeMedian*dir>0).length/bh.length:0;
+  const pos = bh.length?bh.filter(r=>{const e=edgeOf(r);return e!=null&&e*dir>0;}).length/bh.length:0;
   const consistency = pos>=0.7?2:pos>=0.5?1:0;
   let total=sample+signif+tail+regime+consistency;
   let action = total>=7?'act':total>=5?'monitor':'ignore';
@@ -483,7 +496,7 @@ function credibility(ev){
   // edge that is a pre-era artefact). Logged on the card so the cap is transparent.
   let override=null;
   if(ev.gateOverride){ const ORD={act:2,monitor:1,ignore:0}; if(ORD[ev.gateOverride]!=null && ORD[ev.gateOverride]<ORD[action]){ override={from:action,to:ev.gateOverride,note:ev.gateOverrideNote||''}; action=ev.gateOverride; } }
-  return {total,action,bestP,override,dir,breakdown:{'Sample':sample,'Significance':signif,'Tail asym':tail,'Regime':regime,'Consistency':consistency}};
+  return {total,action,bestP,override,dir,useHit,breakdown:{'Sample':sample,'Significance':signif,'Tail asym':tail,'Regime':regime,'Consistency':consistency}};
 }
 function gate(c){const cls=c.action==='act'?'gate-act':c.action==='ignore'?'gate-ignore':'gate-monitor';return `<span class="gate ${cls}">${c.action.toUpperCase()} ${c.total}/10</span>`;}
 function gateDot(c){const col=c.action==='act'?'var(--gn)':c.action==='ignore'?'var(--t3)':'var(--am)';return `<span class="gdot" style="background:${col}"></span>`;}
@@ -652,7 +665,7 @@ function renderEvent(ev,data){
       ${ev.carriedForward?`<span class="tag warn">not recomputed today</span>`:''}
     </div>
     ${ev.carriedForward?`<div class="kv" style="background:#fff7ed;border-left:3px solid var(--am);padding:8px 10px;font-size:12.5px;margin-top:6px"><b>Carried forward — these numbers were last computed ${(ev.carriedFrom||'').slice(0,10)||'at an unknown date'}, not today.</b> ${ev.carriedReason||''}. The rest of this page refreshed normally; this card did not, so read its figures at that vintage.</div>`:''}
-    <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}${cred.dir<0?`<span class="b bdir" title="Declared in the catalogue before the numbers were computed, so the gate cannot pick whichever sign scored better">scored on a FALL</span>`:''}</div>
+    <div class="brk"><span class="bl">Credibility ${cred.total}/10:</span>${Object.entries(cred.breakdown).map(([k,v])=>`<span class="b">${k} ${v}/2</span>`).join('')}${cred.dir<0?`<span class="b bdir" title="Declared in the catalogue before the numbers were computed, so the gate cannot pick whichever sign scored better">scored on a FALL</span>`:''}${cred.useHit?`<span class="b bdir" title="This study's finding is distributional, not a median effect, so the gate scores the share of positive outcomes. Declared in the catalogue, so the gate cannot pick whichever statistic scored better">scored on HIT RATE</span>`:''}</div>
     ${cred.override?`<div class="kv" style="background:#fff7ed;border-left:3px solid var(--am);padding:8px 10px;font-size:12.5px;margin-top:6px"><b>Analyst override — capped ${cred.override.from.toUpperCase()} → ${cred.override.to.toUpperCase()}.</b> ${cred.override.note}</div>`:''}
     ${livePanel(ev)}
     ${currentStatePanel(ev)}
@@ -801,8 +814,13 @@ function statusTable(data){
       state=`<span class="ln"><b>live</b> · ${r.s.k}d in</span><span class="ln"><span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% expected</span>`;
       stateCls='is-live';
     } else if(r.d!=null){
-      state = r.d<400 ? `dormant ${Math.round(r.d/30)} mo` : `dormant ${(r.d/365).toFixed(1)} yr`;
-      stateCls='is-dormant';
+      // A card that triggers on the LAST bar has no forward window yet, so liveStatus
+      // returns null and it lands here — where `d` is zero or negative against the
+      // daily-window end and printed as "dormant -1 mo". It is the opposite of dormant.
+      // (The daily window is built from a shorter series than some cards' own targets,
+      // so d can be negative by several weeks without anything being wrong.)
+      state = r.d<=0 ? `<b>just triggered</b>` : (r.d<400 ? `dormant ${Math.round(r.d/30)} mo` : `dormant ${(r.d/365).toFixed(1)} yr`);
+      stateCls = r.d<=0 ? 'is-live' : 'is-dormant';
     }
     return `<tr class="jump ${stateCls}" data-i="${r.i}" title="${(ev.summary||'').replace(/"/g,'&quot;').slice(0,240)}">
       <td class="nm">${ev.name}${dtag?`<span class="ln">${dtag}</span>`:''}</td>

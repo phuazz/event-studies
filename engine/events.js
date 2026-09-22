@@ -162,10 +162,12 @@ function loadTicker(tk) {
 //
 // The guard is that carrying is permitted ONLY for a ticker named here. Any
 // other missing input is still fatal, because it means the fetch broke.
-const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII', 'USPRIME']);
+const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII', 'USPRIME',
+                                    'NYHIGH', 'NYLOW', 'NYA200']);
 
 function requiredTickers(ev) {
-  return [ev.target, ev.ratioTicker, ev.indicatorTicker].filter(Boolean);
+  return [ev.target, ev.ratioTicker, ev.indicatorTicker,
+          ev.newHighsTicker, ev.newLowsTicker, ev.above200Ticker].filter(Boolean);
 }
 
 function missingInputs(ev) {
@@ -561,6 +563,67 @@ function detectIndicatorFirstStep(target, ind, ev) {
   return { dates, ac, triggers, indicator, indicatorName: ev.indicatorName || 'policy rate' };
 }
 
+// Multi-condition breadth divergence: internals deteriorating while the index sits near
+// its high. Built for the NYSE new-lows / 200-day risk-off model, whose rule arrived
+// FULLY SPECIFIED — every threshold stated, nothing proprietary, no curated event list.
+// That is rare enough to be worth saying: this detector implements someone else's
+// published rule rather than reconstructing one.
+//
+//   C1  pct new highs = HI/(HI+LO) crosses BELOW `pctHighCross`
+//   C2  pct of stocks above their 200-day MA <= `maxAbove200`
+//   C3  index within `nearHighPct` of its 252-day high
+//   C4  re-arm only once pct new LOWS falls below `resetLows`
+//
+// THE THRESHOLDS ARE NOT LOAD-BEARING, which was checked before building: their stated
+// levels (21 / 49.75), round numbers (20 / 50) and our own percentiles (25 / 49) all
+// produce 24 signals on near-identical dates. A fitted boundary would not survive that.
+//
+// Causal by construction: every input is a completed daily reading and the entry is the
+// close of the day the condition set first holds.
+function detectBreadthDivergence(target, hiS, loS, maS, ev) {
+  const t1 = ev.pctHighCross != null ? ev.pctHighCross : 21;
+  const t2 = ev.maxAbove200 != null ? ev.maxAbove200 : 49.75;
+  const near = ev.nearHighPct != null ? ev.nearHighPct : 4.5;
+  const reset = ev.resetLows != null ? ev.resetLows : 10;
+  const lookback = ev.highLookback || 252;
+
+  // Align all four series on the target's calendar; a breadth reading with no matching
+  // index close cannot be traded on and is dropped rather than carried forward.
+  const byDate = s => { const m = new Map(); for (const b of (s.daily || [])) if (b.v != null) m.set(b.d, b.v); return m; };
+  const H = byDate(hiS), L = byDate(loS), M = byDate(maS);
+  const rows = [];
+  for (const b of target.daily) {
+    if (!H.has(b.d) || !L.has(b.d) || !M.has(b.d)) continue;
+    const h = H.get(b.d), l = L.get(b.d), tot = h + l;
+    if (!(tot > 0)) continue;
+    rows.push({ d: b.d, ac: b.ac, pch: h / tot * 100, pcl: l / tot * 100, m2: M.get(b.d) });
+  }
+  const dates = rows.map(r => r.d), ac = rows.map(r => r.ac);
+  const n = rows.length;
+
+  // Rolling 252-day high of the index, on the aligned calendar.
+  const hh = new Array(n).fill(null);
+  for (let i = lookback - 1; i < n; i++) {
+    let mx = -Infinity;
+    for (let k = i - lookback + 1; k <= i; k++) if (ac[k] > mx) mx = ac[k];
+    hh[i] = mx;
+  }
+
+  const triggers = [];
+  let armed = true;
+  for (let i = 1; i < n; i++) {
+    if (rows[i].pcl < reset) armed = true;
+    if (!armed || hh[i] == null) continue;
+    const off = ac[i] / hh[i] - 1;                       // <= 0
+    if (rows[i].pch < t1 && rows[i - 1].pch >= t1 && rows[i].m2 <= t2 && off >= -near / 100) {
+      triggers.push(i);
+      armed = false;
+    }
+  }
+  return { dates, ac, triggers, indicator: rows.map(r => +r.pch.toFixed(1)),
+           indicatorName: 'NYSE % new highs (of highs + lows)' };
+}
+
 // Volatility-normalised thrust: a ~1-week move measured in units of the
 // instrument's OWN prior volatility ("sigma move"), so a 10% week in a calm
 // regime scores higher than a 10% week in a violent one. Mechanism: a move that
@@ -687,9 +750,20 @@ function analyseEvent(series, ev, regimeMap) {
     // range, take the median forward return, repeat. The null inherits the same
     // overlap structure and sample size as the conditional set, so the p-value
     // is not inflated by pseudo-replication.
-    let ge = 0;
+    // A SECOND STATISTIC OFF THE SAME DRAWS. Some studies say nothing about the median
+    // and a great deal about the SHAPE — fewer positive outcomes, deeper drawdowns. The
+    // discipline notes call this out (a median-scored gate is blind to a tail rule), and
+    // the NYSE risk-off model is the case that forced it: its 3-month median wanders with
+    // the de-clustering window while its hit rate sits at 40-53% against a 70% base in
+    // every specification. Scoring the proportion positive on the SAME null costs one
+    // counter and cannot be accused of a different sampling scheme.
+    //
+    // Emitted by this analyser only. The seasonal and ratio analysers do not yet carry
+    // it, and the gate treats a missing `pValueHit` as unavailable rather than as zero.
+    let ge = 0, geHit = 0;
     const nullMedians = [];
     const maxStart = ac.length - h;
+    const condHit = hitRate(fwd);
     if (n > 0 && maxStart > 0) {
       for (let b = 0; b < BOOT_ITERS; b++) {
         const draws = [];
@@ -697,9 +771,14 @@ function analyseEvent(series, ev, regimeMap) {
         const m = median(draws);
         nullMedians.push(m);
         if (m >= condMedian) ge++;
+        let pos = 0;
+        for (const d of draws) if (d > 0) pos++;
+        if (pos / n >= condHit) geHit++;
       }
     }
     const pTwoSided = n > 0 ? 2 * Math.min(ge, BOOT_ITERS - ge) / BOOT_ITERS : NaN;
+    const pHit = n > 0 && maxStart > 0
+      ? 2 * Math.min(geHit, BOOT_ITERS - geHit) / BOOT_ITERS : NaN;
     const percentile = n > 0 ? 1 - ge / BOOT_ITERS : NaN; // where the conditional median sits in the null
 
     // CI on the conditional median by resampling episodes with replacement.
@@ -720,7 +799,8 @@ function analyseEvent(series, ev, regimeMap) {
       mfeMedian: median(mfe), maeMedian: median(mae),
       baseMean: mean(base), baseMedian: median(base), baseHit: hitRate(base),
       edgeMedian: condMedian - median(base),
-      ciLo, ciHi, pValue: pTwoSided, percentile
+      edgeHit: hitRate(fwd) - hitRate(base),
+      ciLo, ciHi, pValue: pTwoSided, pValueHit: pHit, percentile
     };
   });
 
@@ -1343,6 +1423,7 @@ function main() {
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
+        scoreOn: ev.scoreOn === 'hitrate' ? 'hitrate' : 'median',
         // The horizon the THESIS is stated over (9 months here) — the denominator
         // the live monitor measures progress against. Distinct from the 1Y fan span.
         thesisHorizonDays: ev.thesisHorizonDays || null,
@@ -1360,6 +1441,7 @@ function main() {
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
+        scoreOn: ev.scoreOn === 'hitrate' ? 'hitrate' : 'median',
         thesisHorizonDays: ev.thesisHorizonDays || null,
         // Explicit, logged analyst override of the mechanical credibility gate
         // (the gate scores on full-sample significance, which here is a pre-1974
@@ -1378,6 +1460,7 @@ function main() {
       out.events.push({
         id: ev.id, name: ev.name, kind: ev.kind,
         target: ev.target, cadence: 'monthly', direction: ev.direction === 'down' ? 'down' : 'up',
+        scoreOn: ev.scoreOn === 'hitrate' ? 'hitrate' : 'median',
         rationale: ev.rationale, summary: ev.summary || null, definition: ev.definition,
         entryNote: 'Forward returns measured on the target from the trigger month-end close (event-study convention).',
         ...res
@@ -1395,6 +1478,9 @@ function main() {
       series = detectIndicatorLevelCross(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
     } else if (ev.kind === 'indicator_first_step_after_pause') {
       series = detectIndicatorFirstStep(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
+    } else if (ev.kind === 'breadth_divergence_near_high') {
+      series = detectBreadthDivergence(loadTicker(ev.target), loadTicker(ev.newHighsTicker),
+                                       loadTicker(ev.newLowsTicker), loadTicker(ev.above200Ticker), ev);
     } else if (ev.kind === 'volatility_thrust') {
       series = detectVolatilityThrust(loadTicker(ev.target), ev);
     } else if (ev.kind === 'breadth_recovery_from_drawdown') {
@@ -1419,6 +1505,9 @@ function main() {
       // against it; inferring it from the results would let the gate keep whichever
       // sign scored better, doubling the multiple-testing surface of every card.
       direction: ev.direction === 'down' ? 'down' : 'up',
+      // Which statistic the gate scores this card on, declared in the catalogue for the
+      // same reason as `direction`: so it cannot be chosen after seeing which one wins.
+      scoreOn: ev.scoreOn === 'hitrate' ? 'hitrate' : 'median',
       gateOverride: ev.gateOverride || null, gateOverrideNote: ev.gateOverrideNote || null,
       // The horizon the THESIS is stated over (e.g. a multi-week snap-back for a
       // washout) — the denominator the live monitor measures progress against,

@@ -81,8 +81,11 @@ for (const ev of downs) {
       `Significance ${after.breakdown.Significance}/2`);
   add(`${ev.id}: consistency scores off the declared direction`, after.breakdown.Consistency > 0,
       `Consistency ${after.breakdown.Consistency}/2`);
-  add(`${ev.id}: bestP is the true lowest p among cells in its direction`,
-      bestCell != null && Math.abs(after.bestP - bestCell.pValue) < 1e-9);
+  // The bestP clause is median-specific. A hit-rate card's equivalent is asserted in 3b.
+  if (ev.scoreOn !== 'hitrate') {
+    add(`${ev.id}: bestP is the true lowest p among cells in its direction`,
+        bestCell != null && Math.abs(after.bestP - bestCell.pValue) < 1e-9);
+  }
   add(`${ev.id}: the fix actually changed its standing`, after.total > before.total);
   add(`${ev.id}: credibility() exposes dir for the display layer`, after.dir === -1);
 }
@@ -91,12 +94,50 @@ add('at least one down card is live (otherwise this file guards nothing)', downs
 /* 3. Direction must NEVER be inferred from the numbers. Feeding the same negative-edge
  *    card in with no declared direction has to reproduce the old, blind score. */
 for (const ev of downs) {
+  // Strip EVERY declared scoring field, not just direction — a hit-rate card left with
+  // scoreOn set would still be scored on the new statistic and the clause would compare
+  // two different things. Undeclared on both axes must reproduce the pre-fix gate exactly.
   const undeclared = { ...ev };
   delete undeclared.direction;
+  delete undeclared.scoreOn;
   const a = gateBeforeFix(ev), b = credibility(undeclared);
-  add(`${ev.id}: omitting direction reproduces the pre-fix score (no sign-fishing)`,
+  add(`${ev.id}: undeclared on both axes reproduces the pre-fix score (no fishing)`,
       b.total === a.total && b.action === a.action, `${b.action} ${b.total}/10 vs ${a.action} ${a.total}/10`);
 }
+
+/* 3b. SCORING METRIC. Same contract as direction: declared in the catalogue, never
+ *     inferred. A card that leaves `scoreOn` unset must score exactly as it did before
+ *     the field existed, so the gate can never quietly adopt whichever statistic wins. */
+const hitCards = data.events.filter(e => e.scoreOn === 'hitrate');
+for (const ev of hitCards) {
+  const declared = credibility(ev);
+  const undeclared = { ...ev };
+  delete undeclared.scoreOn;
+  const asMedian = credibility(undeclared);
+  const bestNegHit = (ev.byHorizon || []).filter(r => r.edgeHit < 0 && r.pValueHit != null)
+    .reduce((m, r) => (!m || r.pValueHit < m.pValueHit ? r : m), null);
+  console.log(`  ${ev.id}: scoreOn=hitrate -> ${declared.action} ${declared.total}/10 ` +
+              `(bestP ${declared.bestP}); same card scored on the median -> ` +
+              `${asMedian.action} ${asMedian.total}/10`);
+  add(`${ev.id}: the gate actually uses the hit-rate statistic`, declared.useHit === true);
+  add(`${ev.id}: dropping scoreOn falls back to the median, no metric-fishing`,
+      asMedian.useHit === false);
+  add(`${ev.id}: bestP is the lowest hit-rate p among cells in its direction`,
+      bestNegHit != null && Math.abs(declared.bestP - bestNegHit.pValueHit) < 1e-9);
+  add(`${ev.id}: the engine emits edgeHit and pValueHit for every horizon`,
+      (ev.byHorizon || []).every(r => r.edgeHit != null && r.pValueHit != null));
+}
+add('at least one hit-rate card is live (otherwise this clause guards nothing)',
+    hitCards.length >= 1);
+
+/* Median-scored cards must be untouched by the scoreOn work. */
+let mdrift = 0;
+for (const ev of data.events.filter(e => e.scoreOn !== 'hitrate')) {
+  const a = credibility(ev);
+  const b = credibility({ ...ev, scoreOn: 'median' });
+  if (a.total !== b.total || a.action !== b.action) mdrift++;
+}
+add('explicitly declaring scoreOn:median changes nothing', mdrift === 0);
 
 /* 4. Tail asymmetry must swap MFE/MAE for a down study, not reuse the up-study pair. */
 const synth = {
