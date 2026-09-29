@@ -163,7 +163,7 @@ function loadTicker(tk) {
 // The guard is that carrying is permitted ONLY for a ticker named here. Any
 // other missing input is still fatal, because it means the fetch broke.
 const LOCAL_ONLY_TICKERS = new Set(['GSPC', 'NDX', 'AAII', 'USPRIME',
-                                    'NYHIGH', 'NYLOW', 'NYA200']);
+                                    'NYHIGH', 'NYLOW', 'NYA200', 'SPXNL']);
 
 function requiredTickers(ev) {
   return [ev.target, ev.ratioTicker, ev.indicatorTicker,
@@ -622,6 +622,50 @@ function detectBreadthDivergence(target, hiS, loS, maS, ev) {
   }
   return { dates, ac, triggers, indicator: rows.map(r => +r.pch.toFixed(1)),
            indicatorName: 'NYSE % new highs (of highs + lows)' };
+}
+
+// A percentage series SPIKES above a level while the index still sits near its high,
+// re-armed only once the series has fallen back below a reset level. Built for the S&P 500
+// New Low Spike model, whose rule arrived fully specified:
+//
+//   C1  pct of S&P 500 members at a new 252-day low crosses ABOVE `spikeAbove` (7.7)
+//   C2  the index is within `nearHighPct` (5%) of its `highLookback`-day high
+//   C3  re-arm only once the pct falls below `resetBelow` (0.5)
+//
+// Same family as `detectBreadthDivergence` (breadth deteriorating under an index near its
+// high), different construction and mostly different dates: of this rule's de-clustered
+// signals since 1990, 43% fall within 21 sessions of an NYSE-card signal.
+//
+// Causal: every input is a completed daily reading and the entry is that day's close.
+function detectIndicatorSpikeNearHigh(target, ind, ev) {
+  const above = ev.spikeAbove != null ? ev.spikeAbove : 7.7;
+  const near = ev.nearHighPct != null ? ev.nearHighPct : 5;
+  const reset = ev.resetBelow != null ? ev.resetBelow : 0.5;
+  const lookback = ev.highLookback || 252;
+
+  const iv = new Map();
+  for (const b of (ind.daily || [])) if (b.v != null) iv.set(b.d, b.v);
+  const rows = target.daily.filter(b => iv.has(b.d)).map(b => ({ d: b.d, ac: b.ac, v: iv.get(b.d) }));
+  const dates = rows.map(r => r.d), ac = rows.map(r => r.ac), n = rows.length;
+
+  const hh = new Array(n).fill(null);
+  for (let i = lookback - 1; i < n; i++) {
+    let mx = -Infinity;
+    for (let k = i - lookback + 1; k <= i; k++) if (ac[k] > mx) mx = ac[k];
+    hh[i] = mx;
+  }
+  const triggers = [];
+  let armed = true;
+  for (let i = 1; i < n; i++) {
+    if (rows[i].v < reset) armed = true;
+    if (!armed || hh[i] == null) continue;
+    if (rows[i].v > above && rows[i - 1].v <= above && ac[i] / hh[i] - 1 > -near / 100) {
+      triggers.push(i);
+      armed = false;
+    }
+  }
+  return { dates, ac, triggers, indicator: rows.map(r => +r.v.toFixed(2)),
+           indicatorName: ev.indicatorName || 'indicator %' };
 }
 
 // Volatility-normalised thrust: a ~1-week move measured in units of the
@@ -1478,6 +1522,8 @@ function main() {
       series = detectIndicatorLevelCross(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
     } else if (ev.kind === 'indicator_first_step_after_pause') {
       series = detectIndicatorFirstStep(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
+    } else if (ev.kind === 'indicator_spike_near_high') {
+      series = detectIndicatorSpikeNearHigh(loadTicker(ev.target), loadTicker(ev.indicatorTicker), ev);
     } else if (ev.kind === 'breadth_divergence_near_high') {
       series = detectBreadthDivergence(loadTicker(ev.target), loadTicker(ev.newHighsTicker),
                                        loadTicker(ev.newLowsTicker), loadTicker(ev.above200Ticker), ev);

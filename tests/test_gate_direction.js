@@ -86,7 +86,18 @@ for (const ev of downs) {
     add(`${ev.id}: bestP is the true lowest p among cells in its direction`,
         bestCell != null && Math.abs(after.bestP - bestCell.pValue) < 1e-9);
   }
-  add(`${ev.id}: the fix actually changed its standing`, after.total > before.total);
+  // The fix must change WHICH CELL sets bestP, not necessarily the total. A down card can
+  // score the same under both gates for opposite reasons: nyse-riskoff-divergence reaches
+  // 5/10 pre-fix by reading its significantly POSITIVE one-month median as an up card —
+  // the exact sign-blindness the fix exists to stop — and 5/10 post-fix off its negative
+  // hit rate. Asserting total > total would fail on a coincidence and pass on nothing.
+  const useHit = ev.scoreOn === 'hitrate';
+  const bestCellAfter = (ev.byHorizon || []).find(r =>
+    Math.abs((useHit ? r.pValueHit : r.pValue) - after.bestP) < 1e-12);
+  const edgeAfter = bestCellAfter ? (useHit ? bestCellAfter.edgeHit : bestCellAfter.edgeMedian) : null;
+  add(`${ev.id}: post-fix bestP is set by a cell in the declared direction`,
+      edgeAfter != null && edgeAfter * after.dir > 0,
+      bestCellAfter ? `${bestCellAfter.label} edge ${(edgeAfter * 100).toFixed(1)}` : 'no cell');
   add(`${ev.id}: credibility() exposes dir for the display layer`, after.dir === -1);
 }
 add('at least one down card is live (otherwise this file guards nothing)', downs.length >= 1);
