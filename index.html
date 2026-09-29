@@ -256,6 +256,32 @@ const sgn=v=> v>0?'pos':(v<0?'neg':'');
 
 function q(a,p){if(!a.length)return NaN;const s=a.slice().sort((x,y)=>x-y);const pos=(s.length-1)*p,lo=Math.floor(pos),hi=Math.ceil(pos);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(pos-lo);}
 
+// Daily cards ship `priceSeriesSparse`: only the bars this page reads (252 forward bars
+// after each episode, everything since the last trigger, the last six bars), as
+// segments that state their absolute start plus the full series length. It is rebuilt
+// here into a POSITIONAL array, so episodes[i].idx, ps.length and every index below
+// mean exactly what they meant when the whole series was shipped. A bar that was not
+// shipped is a hole: reading it throws, it does not return a plausible wrong number.
+// A card that still carries a full `priceSeries` (the monthly cards, or a results file
+// written before 2026-09-29) is left as it is. tests/test_payload_trim.js renders every
+// card from both forms and asserts identical output.
+function hydrate(data){
+  for(const ev of data.events||[]){
+    const sp=ev.priceSeriesSparse;
+    if(!sp||Array.isArray(ev.priceSeries)) continue;
+    const ps=new Array(sp.length);
+    let prevEnd=0;
+    for(const s of sp.segments){
+      const m=s.ac.length;
+      if(s.start<prevEnd||s.d.length!==m||s.ind.length!==m||s.start+m>sp.length) throw new Error('malformed priceSeriesSparse on '+ev.id);
+      for(let j=0;j<m;j++) ps[s.start+j]={d:s.d[j],ac:s.ac[j],ind:s.ind[j]};
+      prevEnd=s.start+m;
+    }
+    ev.priceSeries=ps;
+  }
+  return data;
+}
+
 // Build the forward-path distribution from priceSeries + episode indices.
 // At each forward trading day k: percentiles of cumulative return across episodes,
 // plus the running-minimum drawdown (so we can draw the worst-path envelope).
@@ -890,7 +916,7 @@ async function boot(){
   try{
     const r=await fetch('events_results.json?v='+Date.now());
     if(!r.ok) throw new Error('events_results.json HTTP '+r.status);
-    DATA=await r.json();
+    DATA=hydrate(await r.json());
     const w=DATA.dailyWindow||{};
     document.getElementById('meta').innerHTML=
       `Generated ${(DATA.generatedAt||'').slice(0,10)}<br>Daily window ${w.start||'?'} → ${w.end||'?'}<br>${DATA.events.length} event(s) × ${(DATA.horizonLabels||HZ_FALLBACK).length} horizons`

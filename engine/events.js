@@ -35,7 +35,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// EVENTS_DATA_DIR lets a worktree read the main checkout's gitignored data/, and lets a
+// test stage a data set with the local-only inputs absent to reproduce a CI carry.
+const DATA_DIR = process.env.EVENTS_DATA_DIR || path.join(__dirname, '..', 'data');
 const CATALOGUE = process.env.EVENTS_CATALOGUE || path.join(__dirname, '..', 'catalogue', 'catalogue.json');
 const UNIVERSES = path.join(__dirname, '..', 'universes.json');
 const OUT = process.env.EVENTS_OUT || path.join(__dirname, '..', 'events_results.json');
@@ -745,6 +747,84 @@ function detectMomentumThrustFrom252dLow(target, ev) {
   return { dates, ac, triggers, indicator: roc.map(r => r == null ? null : +(r * 100).toFixed(1)), indicatorName: `${rocWin}d RoC %` };
 }
 
+// ---------- compact price series for daily cards ----------
+//
+// WHY. Every daily card used to serialise its whole target history as `priceSeries`,
+// one {d, ac, ind} object per bar. That was ~100KB when targets were ten-year Yahoo
+// ETFs. The Norgate-backed cards reach back to 1949 (GSPC) and 1959 (SPXNL), so by
+// 2026-09-29 events_results.json had grown to 2,650,595 bytes, 91% of it price bars,
+// most of which the page never reads: spx-newlow-spike's series alone was 689,998
+// bytes for 17,048 bars, of which the page reads 3,913.
+//
+// WHAT THE PAGE READS. index.html touches priceSeries in three places, all by array
+// position:
+//   buildFan    ps[idx .. idx+252] for every episode (the range-of-outcomes fan, and
+//               the prior-episode fan the live monitor is judged against);
+//   fanChart    ps[last.idx .. last.idx+252] for the latest-instance path;
+//   liveStatus  ps[last.idx .. end] (mark, peak and trough since the last trigger,
+//               however long ago) and ps[end-5] (the five-day change).
+// So the bars kept are: FAN_DAYS forward bars after every episode, everything from
+// the last episode to the end, and the final CHG_BARS + 1 bars. Nothing else.
+//
+// POSITIONS ARE PRESERVED, NOT RENUMBERED. Episodes carry `idx` into the full series
+// and the page computes elapsed days as `ps.length - 1 - last.idx`. Rather than rewrite
+// those consumers, each kept run of bars is emitted as a segment that states its
+// absolute `start`, alongside the full series `length`. index.html rebuilds a
+// positional array from that on load (`hydrate`), so every index means what it meant
+// before. A bar that was not emitted is a hole: reading it throws, it does not return
+// a plausible wrong number. tests/test_payload_trim.js renders every card from the full
+// and the compact series and asserts the output is identical.
+//
+// Monthly cards (seasonal, ratio) are not compacted: ~930 bars each, and their fan is
+// precomputed by the engine, so the page barely reads their series.
+const FAN_DAYS = 252;   // must match the k <= 252 bound in index.html buildFan / fanChart
+const CHG_BARS = 5;     // must match liveStatus's five-day change, ps[ps.length - 6]
+
+function sparsifyPriceSeries(priceSeries, episodes) {
+  const n = priceSeries.length;
+  const keep = new Uint8Array(n);
+  const mark = (a, b) => { for (let i = Math.max(0, a); i <= Math.min(n - 1, b); i++) keep[i] = 1; };
+  const idxs = (episodes || []).map(e => e.idx).filter(i => i != null);
+  for (const i of idxs) mark(i, i + FAN_DAYS);
+  if (idxs.length) mark(idxs[idxs.length - 1], n - 1);
+  mark(n - 1 - CHG_BARS, n - 1);
+  // Columnar, one segment per unbroken run: the keys are written once per segment
+  // rather than once per bar, and the values are exactly the values priceSeries held.
+  const segments = [];
+  let seg = null;
+  for (let i = 0; i < n; i++) {
+    if (!keep[i]) { seg = null; continue; }
+    if (!seg) { seg = { start: i, d: [], ac: [], ind: [] }; segments.push(seg); }
+    const b = priceSeries[i];
+    seg.d.push(b.d); seg.ac.push(b.ac); seg.ind.push(b.ind);
+  }
+  return { length: n, segments };
+}
+
+// The inverse, for Node consumers (tests, scripts/exit_rule_study.js). index.html
+// carries its own copy in `hydrate`; the test asserts the two agree on every card.
+function expandPriceSeries(sparse) {
+  const out = new Array(sparse.length);
+  let prevEnd = 0;
+  for (const s of sparse.segments) {
+    const m = s.ac.length;
+    if (s.start < prevEnd || s.d.length !== m || s.ind.length !== m || s.start + m > sparse.length)
+      throw new Error(`malformed priceSeriesSparse segment at ${s.start}`);
+    for (let j = 0; j < m; j++) out[s.start + j] = { d: s.d[j], ac: s.ac[j], ind: s.ind[j] };
+    prevEnd = s.start + m;
+  }
+  return out;
+}
+
+// A card carried from a results file written before the compact format still holds
+// the full series. Compact it on the way through so the carried card matches what
+// the engine now writes; the rendered numbers are unaffected either way.
+function compactCarriedCard(card) {
+  if (card.cadence === 'monthly' || !Array.isArray(card.priceSeries)) return card;
+  const { priceSeries, ...rest } = card;
+  return { ...rest, priceSeriesSparse: sparsifyPriceSeries(priceSeries, card.episodes) };
+}
+
 // Collapse triggers whose forward windows overlap into one episode. We keep the
 // FIRST trigger of each cluster; any later trigger within `clusterDays` bars of
 // the cluster's anchor is absorbed.
@@ -860,8 +940,9 @@ function analyseEvent(series, ev, regimeMap) {
   const onCount = episodeRows.filter(e => e.regime === 'on').length;
   const offCount = episodeRows.filter(e => e.regime === 'off').length;
 
-  // Downsample target + indicator series for the signal map (keep every bar —
-  // ~2,500 points is fine, but round to keep the JSON compact).
+  // Target + indicator series, rounded, then cut down to the bars the page reads
+  // (see sparsifyPriceSeries). The rounding is unchanged, so every kept value is
+  // exactly the value the full series held.
   const priceSeries = dates.map((d, i) => ({ d, ac: +ac[i].toFixed(2), ind: series.indicator[i] == null ? null : +series.indicator[i].toFixed(1) }));
 
   return {
@@ -874,7 +955,7 @@ function analyseEvent(series, ev, regimeMap) {
     indicatorName: series.indicatorName,
     byHorizon,
     episodes: episodeRows,
-    priceSeries
+    priceSeriesSparse: sparsifyPriceSeries(priceSeries, episodeRows)
   };
 }
 
@@ -1437,7 +1518,7 @@ function main() {
                    `available to this run`;
       if (prior) {
         out.events.push({
-          ...prior,
+          ...compactCarriedCard(prior),
           carriedForward: true,
           carriedFrom: prior.carriedFrom || previous.generatedAt || null,
           carriedReason: note
@@ -1605,4 +1686,6 @@ if (require.main === module) {
   try { main(); } catch (e) { console.error('Fatal:', e.message); process.exit(1); }
 }
 
-module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, analyseSeasonalElectionCycle, loadTicker };
+module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, analyseSeasonalElectionCycle, loadTicker,
+                   sparsifyPriceSeries, expandPriceSeries, compactCarriedCard, FAN_DAYS, CHG_BARS,
+                   LOCAL_ONLY_TICKERS, requiredTickers };

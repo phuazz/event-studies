@@ -28,6 +28,10 @@
 
 const fs = require('fs');
 const path = require('path');
+// Since 2026-09-29 daily cards ship a compact `priceSeriesSparse` rather than the full
+// series. It expands to a positional array with the same length and indices, holding
+// every bar within 252 sessions of an episode, which covers the 63-day paths read here.
+const { expandPriceSeries } = require('../engine/events.js');
 
 const ROOT = path.join(__dirname, '..');
 const RESULTS = path.join(ROOT, 'events_results.json');
@@ -235,7 +239,8 @@ function main() {
   // --- washout stratum: GLD + SLV, H=63 ---
   const wash = [];
   for (const [tk, id] of [['GLD', 'gld-oversold-reversion-downtrend'], ['SLV', 'slv-oversold-reversion-downtrend']]) {
-    const e = ev[id], ps = e.priceSeries.map(b => b.ac);
+    const e = ev[id];
+    const ps = (e.priceSeries || expandPriceSeries(e.priceSeriesSparse)).map(b => b.ac);
     const eps = e.episodes.filter(x => x.idx != null);
     const paths = eps.map(x => pathFrom(ps, x.idx, 63));
     eps.forEach((x, i) => {

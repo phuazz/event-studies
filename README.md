@@ -38,6 +38,19 @@ python scripts/pipeline.py        # inject results → docs/index.html
 
 See `private/NEW-REPO-PLAN.md` (carried over from the scanner) for the full migration plan.
 
+### Results payload (`events_results.json`)
+
+`index.html` fetches this file on every page load. Since 2026-09-29 a daily card ships `priceSeriesSparse` instead of its whole target history: only the bars the page reads (252 forward sessions after each episode, everything since the last trigger, the final six bars), as columnar segments that keep their absolute positions, plus the full series `length`. `hydrate()` in `index.html` rebuilds the positional array on load, so episode `idx` values keep their meaning; `engine/events.js` exports `expandPriceSeries` for Node consumers. Monthly cards still ship their full series. The file went from 2,650,595 to 917,443 bytes on 2026-09-29, with no rendered number changed (`tests/test_payload_trim.js`).
+
+From a worktree, which has no `data/`, point the engine at the main checkout's copy: `EVENTS_DATA_DIR=C:/dev/event-studies/data node engine/events.js`.
+
+Tests (local only; this repo has no CI test run):
+
+```
+node tests/test_gate_direction.js    # direction- and metric-aware credibility gate
+node tests/test_payload_trim.js      # compact series renders exactly as the full one, incl. the CI carry path
+```
+
 ## Two-stage discovery funnel (Norgate)
 
 The catalogue above is the **confirmation** engine (hand-registered events, single-target, Yahoo ETF data). In front of it sits a **discovery** stage that mines the Norgate point-in-time US universe for candidate setups, so the catalogue is fed by evidence rather than only by research emails.
@@ -73,4 +86,4 @@ python scripts/confirm_lead.py --card <config>                  # cross-sectiona
 
 A separate, on-book strand: cross-sectional breadth studies over the `global_etf` universe (single-country / regional ETFs, Norgate-fed, survivorship-free incl. delisted ETFs). `scripts/etf_breadth_engine.py` builds a five-signal breadth library + an equal-weight composite; `scripts/etf_breadth_confirm.py` pre-registers and confirms the composite-thrust hypothesis as a single test (drift-matched Monte Carlo, sub-period + regime cuts). First result (as-of 2026-07-02): a composite breadth thrust precedes emerging-market / world outperformance over 3–6 months (EEM 6M +5.97% excess, p=0.028; EFA +3.8%, p=0.022; US weakest) — full-sample significant but **era-concentrated** (strong pre-2009, dead 2010–2017, back post-2018), so CONFIRMED-WEAK / conditional on the EM secular regime. Records under `private/etf_breadth/` (gitignored). Nothing admitted to the catalogue/dashboard without sign-off.
 
-_Last updated: 2026-07-04._
+_Last updated: 2026-09-29._
