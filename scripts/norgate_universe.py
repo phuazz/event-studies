@@ -105,17 +105,17 @@ def connect():
     return n
 
 
-def expected_last_session(asof: dt.date | None = None) -> dt.date:
-    """Last completed NYSE session on or before `asof`. Uses exchange_calendars,
-    so US market holidays are handled for us. Returns a datetime.date."""
-    import exchange_calendars as xcals
-    cal = xcals.get_calendar("XNYS")
-    asof = asof or dt.date.today()
-    start = asof - dt.timedelta(days=15)   # generous, survives long closures
-    sessions = cal.sessions_in_range(start.isoformat(), asof.isoformat())
-    if len(sessions) == 0:
-        raise RuntimeError("no NYSE sessions found in the lookback window")
-    return sessions[-1].date()
+def expected_last_session(asof: dt.date | dt.datetime | None = None) -> dt.date:
+    """The last NYSE session that has CLOSED by `asof` (default: now, in UTC).
+
+    Delegates to norgate_ready.expected_last_session so the STEP-0 poller and this
+    build-side hard check cannot disagree. Until 2026-09-29 each carried its own
+    copy, and both took the machine's local (Singapore) date and counted a session
+    that had not yet closed, so on a weekday this hard check refused a complete feed
+    and the scan could only run when the SGT date was a weekend or US holiday. See
+    that function for the full account and for what an explicit `asof` means."""
+    from norgate_ready import expected_last_session as _expected
+    return _expected(asof)
 
 
 def _last_bar_date(n, sym: str):

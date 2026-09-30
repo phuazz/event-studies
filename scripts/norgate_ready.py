@@ -23,8 +23,11 @@ though the data is fine. Fix: when last_quoted_date() is None, fall back to the
 last bar date read straight from price_timeseries(), and log loudly that NDU's
 metadata pointer still needs a rebuild.
 
-Date handling: NYSE session dates come from exchange_calendars (calendar 'XNYS').
-No manual weekday/day-offset arithmetic. Python datetime months are 1-indexed.
+Date handling: NYSE session dates and close times come from exchange_calendars
+(calendar 'XNYS'). "The last completed session" means the last one that has
+CLOSED by the instant of the check, in UTC, not the last one dated on or before
+the machine's local date (see expected_last_session). No manual weekday/day-offset
+arithmetic. Python datetime months are 1-indexed.
 
 Exit codes (single-check mode): 0 = ready, 2 = not ready, 3 = error.
 Usage:
@@ -44,19 +47,51 @@ STABLE_CONFIRM_SECONDS = 60            # a ready read must still hold this much 
 
 
 def expected_last_session(asof=None, cal=None):
-    """Last completed NYSE session dated on or before `asof` (a date).
+    """The last NYSE session that has CLOSED by `asof`. Returns a datetime.date.
 
-    Uses exchange_calendars, so US market holidays are handled for us.
-    Returns a datetime.date.
+    `asof` is one of:
+      - None (the default): the instant of the check, now, in UTC;
+      - a timezone-aware datetime: that instant (a naive one is refused, because
+        the machine's local zone is exactly what went wrong before);
+      - a date: an explicit as-of day, read as "after that day's close", so the
+        session dated `asof` counts if there is one. Historical re-runs pass this.
+
+    WHY THE INSTANT MATTERS (fixed 2026-09-29). This used to take the machine's
+    local date and return the last session dated on or before it, whether or not
+    that session had closed. On this machine the local zone is Singapore, where
+    that is wrong for every weekday: a US session closes at 04:00 SGT the next day
+    (05:00 in US standard time), so by the time its bars can exist the local date
+    has already moved on to a session that has not opened. The gate therefore
+    demanded a bar that could not exist yet, and could only pass on a day whose SGT
+    date was a weekend or a US holiday.
+    Observed on 2026-09-29 at 14:26 UTC: NOT-READY, expected 2026-09-29, against a
+    feed complete through 2026-09-28 while the 29th was still trading.
+
+    Close times come from exchange_calendars, so holidays, early closes (the day
+    after Thanksgiving, Christmas Eve) and daylight saving are handled for us. No
+    manual day or weekday arithmetic.
     """
     import exchange_calendars as xcals
+    import pandas as pd
     cal = cal or xcals.get_calendar("XNYS")
-    asof = asof or dt.date.today()
+    if isinstance(asof, dt.datetime):          # checked first: a datetime IS a date
+        if asof.tzinfo is None:
+            raise ValueError("expected_last_session: a datetime asof must be timezone-aware")
+        now = pd.Timestamp(asof).tz_convert("UTC")
+    elif isinstance(asof, dt.date):
+        now = None
+    else:
+        now = pd.Timestamp.now(tz="UTC")
+    # The last day any candidate session can be dated. For an instant, its UTC date
+    # is enough: a session dated later than that cannot have opened, let alone closed.
+    end = now.date() if now is not None else asof
     # Look back a generous window to survive long holiday closures.
-    start = asof - dt.timedelta(days=15)
-    sessions = cal.sessions_in_range(start.isoformat(), asof.isoformat())
-    if len(sessions) == 0:
-        raise RuntimeError("no NYSE sessions found in lookback window")
+    start = end - dt.timedelta(days=15)
+    sessions = list(cal.sessions_in_range(start.isoformat(), end.isoformat()))
+    if now is not None:
+        sessions = [s for s in sessions if cal.session_close(s) <= now]
+    if not sessions:
+        raise RuntimeError("no closed NYSE session found in the lookback window")
     return sessions[-1].date()
 
 
@@ -143,9 +178,11 @@ def _print(ready, detail, prefix=""):
     tag = "READY" if ready else "NOT-READY"
     fb = ""
     if detail.get("used_fallback"):
-        fb = ("  [via price-tail fallback: NDU last_quoted_date is None across "
-              "databases (market-closed day); price arrays are present but the "
-              "metadata pointer needs an NDU rebuild]")
+        # First seen on a market-closed day (2026-07-04), but not confined to one:
+        # on 2026-09-29 and 2026-09-30, both trading days, the field was None for
+        # every benchmark while the price arrays were complete.
+        fb = ("  [via price-tail fallback: NDU last_quoted_date is None for the "
+              "benchmarks; freshness read from the price arrays, which are present]")
     print(f"{prefix}[{tag}] expected>={detail['expected_last_session']} "
           f"benchmarks={detail['benchmark_dates']} "
           f"delisted_symbols={detail['delisted_symbol_count']}{fb}")
@@ -198,32 +235,65 @@ def main():
 
 
 def selftest():
-    """Edge-case tests for the date helper: one month boundary, one year boundary.
+    """Edge-case tests for the session helper, on the real XNYS calendar.
 
-    We stub the calendar so the test is deterministic and offline. Python months
-    are 1-indexed (Jan=1, Dec=12).
+    exchange_calendars computes sessions from rules, so this is deterministic and
+    offline. Python months are 1-indexed (Jan=1, Dec=12). Every instant is written
+    in UTC unless stated; NYSE opens 13:30 UTC and closes 20:00 UTC in US daylight
+    time, 14:30 and 21:00 UTC in standard time.
     """
-    class _StubCal:
-        def __init__(self, sessions):
-            self._s = [dt.date.fromisoformat(x) for x in sessions]
-        def sessions_in_range(self, start, end):
-            s = dt.date.fromisoformat(start); e = dt.date.fromisoformat(end)
-            class _W:  # mimic .date() on each entry
-                def __init__(self, d): self._d = d
-                def date(self): return self._d
-            return [_W(d) for d in self._s if s <= d <= e]
+    import exchange_calendars as xcals
+    cal = xcals.get_calendar("XNYS", start="2026-01-01", end="2027-12-31")
+    utc = dt.timezone.utc
+    sgt = dt.timezone(dt.timedelta(hours=8))
+    D = dt.date
 
-    # Month boundary: asof Sat 1 Aug 2026; last session should be Fri 31 Jul.
-    cal = _StubCal(["2026-07-30", "2026-07-31"])
-    got = expected_last_session(asof=dt.date(2026, 8, 1), cal=cal)
-    assert got == dt.date(2026, 7, 31), got
+    cases = [
+        # --- explicit as-of DAYS keep their old meaning: after that day's close ---
+        ("date: month boundary, Sat 1 Aug 2026 -> Fri 31 Jul",
+         D(2026, 8, 1), D(2026, 7, 31)),
+        ("date: year boundary, Fri 1 Jan 2027 (holiday) -> Thu 31 Dec 2026",
+         D(2027, 1, 1), D(2026, 12, 31)),
+        # --- instants: only a session that has CLOSED counts ---
+        ("the observed failure: Tue 29 Sep 2026 14:26 UTC, the 29th still trading",
+         dt.datetime(2026, 9, 29, 14, 26, tzinfo=utc), D(2026, 9, 28)),
+        ("one minute after the 20:00 UTC close counts the day",
+         dt.datetime(2026, 9, 29, 20, 1, tzinfo=utc), D(2026, 9, 29)),
+        ("one minute before it does not",
+         dt.datetime(2026, 9, 29, 19, 59, tzinfo=utc), D(2026, 9, 28)),
+        ("Singapore next morning, Wed 30 Sep 06:00 SGT, is the 29th's close",
+         dt.datetime(2026, 9, 30, 6, 0, tzinfo=sgt), D(2026, 9, 29)),
+        ("month boundary: Thu 1 Oct 2026 14:00 UTC, trading -> Wed 30 Sep",
+         dt.datetime(2026, 10, 1, 14, 0, tzinfo=utc), D(2026, 9, 30)),
+        ("year boundary: Mon 4 Jan 2027 15:00 UTC, trading, 1 Jan a holiday -> 31 Dec",
+         dt.datetime(2027, 1, 4, 15, 0, tzinfo=utc), D(2026, 12, 31)),
+        ("early close: Fri 27 Nov 2026 closes 18:00 UTC; 18:30 counts it",
+         dt.datetime(2026, 11, 27, 18, 30, tzinfo=utc), D(2026, 11, 27)),
+        ("early close: 17:30 does not, and Thanksgiving (26 Nov) is skipped",
+         dt.datetime(2026, 11, 27, 17, 30, tzinfo=utc), D(2026, 11, 25)),
+        ("standard time: Tue 1 Dec 2026 closes 21:00 UTC; 20:30 is still trading",
+         dt.datetime(2026, 12, 1, 20, 30, tzinfo=utc), D(2026, 11, 30)),
+        ("daylight time: Mon 9 Mar 2026 closes 20:00 UTC; 20:30 counts it",
+         dt.datetime(2026, 3, 9, 20, 30, tzinfo=utc), D(2026, 3, 9)),
+    ]
+    failed = 0
+    for name, asof, want in cases:
+        got = expected_last_session(asof=asof, cal=cal)
+        ok = got == want
+        failed += not ok
+        print(f"  {'ok  ' if ok else 'FAIL'} {name}: {got}" + ("" if ok else f" (want {want})"))
 
-    # Year boundary: asof Fri 1 Jan 2027 (holiday); last session Thu 31 Dec 2026.
-    cal = _StubCal(["2026-12-30", "2026-12-31"])
-    got = expected_last_session(asof=dt.date(2027, 1, 1), cal=cal)
-    assert got == dt.date(2026, 12, 31), got
+    try:
+        expected_last_session(asof=dt.datetime(2026, 9, 29, 14, 26), cal=cal)
+        print("  FAIL a naive datetime was accepted")
+        failed += 1
+    except ValueError:
+        print("  ok   a naive datetime is refused")
 
-    print("[selftest] date-boundary tests passed")
+    if failed:
+        print(f"[selftest] {failed} FAILED")
+        return 1
+    print(f"[selftest] {len(cases) + 1} session-date tests passed")
     return 0
 
 
