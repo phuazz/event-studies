@@ -127,6 +127,20 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .ov-kv dd{margin:0;color:var(--t2);line-height:1.5}
 .ov-kv dd b{color:var(--t1);font-variant-numeric:tabular-nums}
 .ov-kv dd b.neg{color:var(--rd)}.ov-kv dd b.pos{color:var(--gn)}
+.ov-kv .nw{white-space:nowrap}  /* an ISO date otherwise breaks at its hyphen */
+/* Narrow list: each label sits above its value. Side by side, the nowrap uppercase
+   labels hold ~132px at any width, so the 213px list on a 360px phone left the values
+   65px (about a word per line; the Window row ran to eight) and the 284px list beside
+   the band strip at 768px left them 135px. Keyed to the list's own width, not the
+   viewport, because three nested paddings and the 300px strip sit between the two.
+   Above 420px the side-by-side value column is ~270px or more, and it stays. */
+.ov-kvw{container-type:inline-size}
+@container (max-width:420px){
+  .ov-kv{grid-template-columns:1fr;row-gap:0}
+  .ov-kv dt{white-space:normal;padding-top:0;margin-top:11px}
+  .ov-kv dt:first-child{margin-top:0}
+  .ov-kv dd{margin-top:2px}
+}
 .ov-note{font-size:11px;color:var(--t3);text-align:center;margin-top:2px}
 /* Band strip. It was a 300-wide viewBox scaled down to fit, so its SVG labels shrank
    with it: 11px text rendered at 8.9px on a 390px phone. Scale-compensated sizes (14px
@@ -790,13 +804,13 @@ function ovCard({ev,s,c}){
   if(s.chg5!=null) kv.push(['Last 5 days',
     `<b class="${sgn(s.chg5)}">${P1(s.chg5)}</b> <span class="dim">· ${s.chg5<-0.002?'still falling':(s.chg5>0.002?'recovering':'flat')}</span>`]);
 
-  kv.push(['Window', `${prog.txt} <span class="dim">· triggered ${s.date}</span>`]);
+  kv.push(['Window', `${prog.txt} <span class="dim">· triggered <span class="nw">${s.date}</span></span>`]);
 
   return `<div class="ov ${sev.cls}">
     <div class="ov-verdict">${sev.label}</div>
     <div class="ov-name">${ev.name} ${gate(c)}</div>
     <div class="ov-grid">
-      <dl class="ov-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      <div class="ov-kvw"><dl class="ov-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>
       <div>${bandStrip(s)}${s.k<21?'<div class="ov-note">Early in the window — this read is noisy.</div>':''}</div>
     </div>
   </div>`;
