@@ -52,19 +52,27 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
    rule only renders when a card actually has negative values, so an all-positive card
    is pixel-identical to the pre-2026-09-17 layout. */
 .chart{display:flex;align-items:flex-end;gap:18px;padding:10px 4px 0;border-bottom:1px solid var(--bd);margin-bottom:6px;position:relative}
-.col{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
+/* Columns take equal shares of the row and the slots shrink to fit it. min-width:0 on
+   the column is what allows that: a flex item otherwise floors at its content width,
+   which is how seven fixed-width pairs overran the card on a phone. Slots are 26px
+   wherever there is room, so the desktop layout is unchanged. */
+.col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;position:relative}
 .bars{display:flex;gap:5px;width:100%;justify-content:center;height:var(--ph)}
 .chart.haszero .bars{margin-bottom:20px}
 .chart.haszero::after{content:'';position:absolute;left:4px;right:4px;top:calc(10px + var(--zy));
   border-top:1px dashed var(--t3);opacity:.55;pointer-events:none}
-.slot{position:relative;width:26px;height:var(--ph)}
+.slot{position:relative;flex:0 1 26px;min-width:0;height:var(--ph)}
 .bar{position:absolute;left:0;width:100%;border-radius:3px 3px 0 0}
 .bar.dn{border-radius:0 0 3px 3px}
 .bar.cond{background:var(--ac)}
 .bar.cond.neg{background:var(--rd)}
 .bar.base{background:transparent;border:1.5px solid var(--t3)}
+/* On a phone a value label is wider than its bar, so it overhangs the baseline outline
+   beside it. It paints above that outline with a halo in the card colour, so the
+   outline does not strike through the digits. */
 .bar .val{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;
-  white-space:nowrap;color:var(--t2)}
+  white-space:nowrap;color:var(--t2);z-index:1;
+  text-shadow:0 0 2px var(--sf),0 0 2px var(--sf),0 0 2px var(--sf)}
 .bar .val.below{top:auto;bottom:-19px}
 .xlab{font-size:12px;color:var(--t3);margin-top:8px;font-weight:600}
 .legend{display:flex;gap:18px;font-size:12px;color:var(--t3);margin:10px 0 4px}
@@ -107,6 +115,9 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .ov.sev-edge .ov-verdict{color:var(--am)}
 .ov-name{font-size:13px;color:var(--t2);font-weight:600;margin-top:3px}
 .ov-grid{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center;margin-top:14px}
+/* A 1fr column floors at its content's min-content width, and the 300px band strip
+   would hold it there and scroll the page sideways on a phone. */
+.ov-grid>*{min-width:0}
 @media(max-width:760px){.ov-grid{grid-template-columns:1fr;gap:12px}}
 .ov-meta{font-size:12px;color:var(--t3);margin-top:8px;line-height:1.6}
 /* label/value rows — scannable, not prose */
@@ -117,15 +128,19 @@ body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica
 .ov-kv dd b{color:var(--t1);font-variant-numeric:tabular-nums}
 .ov-kv dd b.neg{color:var(--rd)}.ov-kv dd b.pos{color:var(--gn)}
 .ov-note{font-size:11px;color:var(--t3);text-align:center;margin-top:2px}
-/* Band-strip labels. The strip is a 300-wide viewBox with max-width:100%, so on a
-   phone it renders ~243px = scale 0.81 and every label shrinks WITH it: the old
-   9.5px attribute rendered at 7.7px effective, and even an 11px one at 8.9px. The
-   static check could not see it (SVG attributes are not font-size declarations).
-   Declared sizes below are therefore SCALE-COMPENSATED while the strip is shrinking,
-   and drop back to true sizes once the container is wide enough not to scale. */
-.strip-now{font-size:14px;font-weight:700}
-.strip-end{font-size:14px}
-@media(min-width:480px){.strip-now{font-size:11.5px}.strip-end{font-size:11px}}
+/* Band strip. It was a 300-wide viewBox scaled down to fit, so its SVG labels shrank
+   with it: 11px text rendered at 8.9px on a 390px phone. Scale-compensated sizes (14px
+   below 480px) held only at the width they were tuned for; at 360px the strip scales
+   to 0.71 and the labels fell to 9.9px. The labels are now HTML laid over the strip,
+   placed as a share of its width, so they render at their declared size at every
+   width and the static check can see them. The SVG has no viewBox: x positions are
+   percentages and everything vertical is in pixels, so the band and marker keep their
+   size and the strip narrows horizontally only. */
+.strip{position:relative;width:300px;max-width:100%;height:52px}
+.strip svg{display:block}
+.strip-now,.strip-end{position:absolute;transform:translateX(-50%);white-space:nowrap;line-height:1}
+.strip-now{top:1px;font-size:11.5px;font-weight:700}
+.strip-end{top:41px;font-size:11px;color:var(--t3)}
 .ov-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--t3);margin:0 0 16px;align-items:center}
 .ov-legend span{display:inline-flex;align-items:center;gap:6px}
 .ov-legend i{display:inline-block}
@@ -145,12 +160,15 @@ details.disc div{margin-top:9px;line-height:1.75}
 details.disc.rat{margin-top:10px;font-size:13.5px;color:var(--t2)}
 details.disc.rat div{margin-top:10px;line-height:1.72;max-width:78ch;column-gap:34px}
 @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}
-  /* Bars are a fixed 26px each and a column holds two of them; on a phone the
-     flex column compresses to ~41px, so 26+5+26 overran the viewport by 2px and
-     the whole page scrolled sideways. Shrink the pair to fit the column. */
-  .chart{gap:10px;padding:10px 2px 0}
-  .bars{gap:4px}
-  .bar,.slot{width:17px}
+  /* The one phone rule for the bar chart; a second, conflicting block at the end of
+     this sheet has been folded in here. The old fixed 18px slots floored a column at
+     40px, so seven horizons needed 330px against a 254px card at 360px: the 1Y bars
+     painted over the card border and the body scrolled sideways by 23px. Slots now
+     cap at 18px and shrink below it, so any number of horizons fits. The inner gap
+     stays under half the column gap so each pair still reads as a pair. */
+  .chart{gap:8px}
+  .bars{gap:3px}
+  .slot{flex-basis:18px}
 }
 /* fan */
 .fan-wrap{position:relative}
@@ -233,7 +251,6 @@ tr:hover td{background:var(--sa)}
 .dim{color:var(--t3)}
 .err{background:var(--rdb);border:1px solid #FECACA;color:var(--rd);padding:16px 20px;border-radius:var(--r)}
 .foot{font-size:12px;color:var(--t3);margin-top:24px;text-align:center}
-@media(max-width:640px){.chart{gap:8px}.slot{width:18px}.bar,.bar.base{width:100%}}
 </style>
 </head>
 <body>
@@ -585,23 +602,33 @@ function bandStrip(s){
   const lo=Math.min(f.p10,s.mtm,0), hi=Math.max(f.p90,s.mtm,0);
   const span=(hi-lo)||0.01, a=lo-span*0.10, b=hi+span*0.10;
   const x=v=>pad+(v-a)/(b-a)*(W-2*pad);
+  // Horizontal positions are a share of the strip's width, so the same markup is right
+  // at 300px on a desktop and at 213px on a 360px phone.
+  const pu=u=>(u/W*100).toFixed(2)+'%', pc=v=>pu(x(v));
   const sev=severityOf(s);
   const mCol=sev.rank<=1?'#DC2626':'#2563EB';
-  const mx=x(s.mtm);
-  // keep the marker's own label inside the box even when the marker is at an edge
-  const lx=Math.max(26,Math.min(W-26,mx));
-  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%">
-    <text x="${lx.toFixed(1)}" y="11" class="strip-now" fill="${mCol}" text-anchor="middle">${(s.mtm*100).toFixed(1)}% now</text>
-    <line x1="${pad}" y1="${yMid}" x2="${W-pad}" y2="${yMid}" stroke="#E2E0DA" stroke-width="2"/>
-    <rect x="${x(f.p10).toFixed(1)}" y="${yMid-7}" width="${(x(f.p90)-x(f.p10)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.18" rx="2"/>
-    <rect x="${x(f.p25).toFixed(1)}" y="${yMid-7}" width="${(x(f.p75)-x(f.p25)).toFixed(1)}" height="14" fill="#F59E0B" opacity="0.30" rx="2"/>
-    <line x1="${x(f.p50).toFixed(1)}" y1="${yMid-9}" x2="${x(f.p50).toFixed(1)}" y2="${yMid+9}" stroke="#1A1A18" stroke-width="2"/>
-    ${a<0&&b>0?`<line x1="${x(0).toFixed(1)}" y1="${yMid-11}" x2="${x(0).toFixed(1)}" y2="${yMid+11}" stroke="#9E9A92" stroke-width="1" stroke-dasharray="2 2"/>`:''}
-    <line x1="${mx.toFixed(1)}" y1="15" x2="${mx.toFixed(1)}" y2="${yMid-7}" stroke="${mCol}" stroke-width="1"/>
-    <circle cx="${mx.toFixed(1)}" cy="${yMid}" r="5.5" fill="${mCol}" stroke="#fff" stroke-width="1.5"/>
-    <text x="${x(f.p10).toFixed(1)}" y="${H-2}" class="strip-end" fill="#6B6863" text-anchor="middle">${(f.p10*100).toFixed(0)}%</text>
-    <text x="${x(f.p90).toFixed(1)}" y="${H-2}" class="strip-end" fill="#6B6863" text-anchor="middle">${(f.p90*100).toFixed(0)}%</text>
-  </svg>`;
+  const mx=pc(s.mtm);
+  // A label is centred on its mark, but held at least half its own width from each
+  // edge so a mark at the end of the axis cannot push it out of the box. Half-width is
+  // a generous per-character estimate: string length is all that is known here.
+  const label=(cls,txt,v,px,style='')=>{
+    const hw=Math.ceil(txt.length*px*0.33);
+    return `<span class="${cls}" style="left:clamp(${hw}px,${pc(v)},calc(100% - ${hw}px))${style}">${txt}</span>`;
+  };
+  return `<div class="strip">
+    ${label('strip-now',`${(s.mtm*100).toFixed(1)}% now`,s.mtm,11.5,`;color:${mCol}`)}
+    <svg width="100%" height="${H}" aria-hidden="true">
+    <line x1="${pu(pad)}" y1="${yMid}" x2="${pu(W-pad)}" y2="${yMid}" stroke="#E2E0DA" stroke-width="2"/>
+    <rect x="${pc(f.p10)}" y="${yMid-7}" width="${pu(x(f.p90)-x(f.p10))}" height="14" fill="#F59E0B" opacity="0.18" rx="2"/>
+    <rect x="${pc(f.p25)}" y="${yMid-7}" width="${pu(x(f.p75)-x(f.p25))}" height="14" fill="#F59E0B" opacity="0.30" rx="2"/>
+    <line x1="${pc(f.p50)}" y1="${yMid-9}" x2="${pc(f.p50)}" y2="${yMid+9}" stroke="#1A1A18" stroke-width="2"/>
+    ${a<0&&b>0?`<line x1="${pc(0)}" y1="${yMid-11}" x2="${pc(0)}" y2="${yMid+11}" stroke="#9E9A92" stroke-width="1" stroke-dasharray="2 2"/>`:''}
+    <line x1="${mx}" y1="15" x2="${mx}" y2="${yMid-7}" stroke="${mCol}" stroke-width="1"/>
+    <circle cx="${mx}" cy="${yMid}" r="5.5" fill="${mCol}" stroke="#fff" stroke-width="1.5"/>
+    </svg>
+    ${label('strip-end',`${(f.p10*100).toFixed(0)}%`,f.p10,11)}
+    ${label('strip-end',`${(f.p90*100).toFixed(0)}%`,f.p90,11)}
+  </div>`;
 }
 // One legend for the whole view — the strip is otherwise a puzzle.
 function stripLegend(){
