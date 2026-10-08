@@ -1,10 +1,10 @@
 {
   "contract_version": "1",
   "emitted_by": "event-studies",
-  "emitted_at": "2026-10-07T02:14:44+00:00",
+  "emitted_at": "2026-10-08T02:39:48+00:00",
   "signals": {
     "event_strong_q2": {
-      "as_of": "2026-10-07",
+      "as_of": "2026-10-08",
       "state": "LIVE",
       "value": 22,
       "zone": "window 2026-06-30 → 2027-03-30",
@@ -14,7 +14,7 @@
       "licence": "public",
       "action_hint": "none",
       "source_file": "events_results.json",
-      "computed_at": "2026-10-07T02:14:28.064Z",
+      "computed_at": "2026-10-08T02:39:35.191Z",
       "cadence": "daily"
     }
   }
