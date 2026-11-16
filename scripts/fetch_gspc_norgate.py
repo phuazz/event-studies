@@ -82,19 +82,33 @@ def _build_payload(daily_df, monthly_series, source, name):
     }
 
 
-def _drop_incomplete_month(daily_df, monthly_series):
+def _drop_incomplete_month(daily_df, monthly_series, today=None):
     """Drop the trailing monthly bar if its calendar month has not yet closed.
     resample('ME').last() dates a partial current month to its future month-end;
-    an incomplete month must not be written as a closed month-end bar."""
+    an incomplete month must not be written as a closed month-end bar.
+
+    The month counts as closed when the last daily bar is the calendar month-end, or
+    when today's UTC date is past the month-end AND no weekday lies between the last
+    bar and it. The second branch exists for months that end on a weekend: October
+    2026 ends on Saturday the 31st, so its last session (Friday the 30th) sits before
+    the calendar month-end, and the bar-only rule dropped the closed month until a
+    November bar arrived (found 2026-11-01, when it hid the live midterm entry). The
+    weekday condition keeps a feed that stopped mid-week from being written as a
+    month-end. A month-end holiday (Memorial Day on 31 May) falls back to waiting."""
     if monthly_series.empty:
         return monthly_series
+    if today is None:
+        today = datetime.now(timezone.utc).date()
     last_daily = daily_df.index[-1]
     # Month-end of the last daily bar's month (pandas MonthEnd(0) is 1-indexed-safe).
     month_end_of_last = last_daily + pd.offsets.MonthEnd(0)
-    if last_daily < month_end_of_last:
-        # Current month is not closed yet — drop its (future-dated) month-end bar.
-        return monthly_series.iloc[:-1]
-    return monthly_series
+    if last_daily >= month_end_of_last:
+        return monthly_series
+    weekdays_left = pd.bdate_range(last_daily + pd.Timedelta(days=1), month_end_of_last)
+    if today > month_end_of_last.date() and len(weekdays_left) == 0:
+        return monthly_series
+    # Current month is not closed yet — drop its (future-dated) month-end bar.
+    return monthly_series.iloc[:-1]
 
 
 def fetch_norgate():

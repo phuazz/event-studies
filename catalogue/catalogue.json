@@ -77,6 +77,32 @@
       "gateOverrideNote": "Capped to MONITOR: the full-sample 6M significance (p=0.01) is a PRE-1974 artefact — modern (1974-2022, n=13) 6M is only +2.7%, ~base-rate, and the edge does not transfer to the Nasdaq. Seasonal context, not a live edge."
     },
     {
+      "id": "spx-midterm-oct-apr-window",
+      "name": "S&P 500 from end-October of a midterm election year",
+      "summary": "Enter the S&P 500 at end-October of a US midterm election year and hold to end-April. Since 1950 the window has been up in all 19 instances, +10.5pp over the same window in the other cycle years; before 1950 it was not distinguishable from other years (Dow up 7 of 12, +2.4pp, p 0.32). Analyst-capped at MONITOR: a post-1949 seasonal on the same 19 years as the July card, watched rather than acted on.",
+      "kind": "seasonal_election_cycle",
+      "target": "GSPC",
+      "cadence": "monthly",
+      "entryMonth": 10,
+      "yearModulo": 4,
+      "yearRemainder": 2,
+      "forwardMonths": [
+        1,
+        3,
+        6,
+        12
+      ],
+      "regimeSmaMonths": 10,
+      "clusterDays": 0,
+      "thesisHorizonDays": 126,
+      "direction": "up",
+      "scoreOn": "median",
+      "rationale": "A calendar-cycle seasonal: in a US MIDTERM election year (year mod 4 = 2), enter the S&P 500 at the end-of-October close and hold to the end-of-April close of the pre-election year (the 6M horizon). Prompted by a public X lead (Wayne Whaley) and re-tested on OUR data: Norgate $SPX, plus the Dow from 1896 for the years before the lead's sample. OUR numbers only. Mechanism, as for the July card: the four-year presidential cycle, with the run into the pre-election year historically the strongest stretch. IN SAMPLE (windows starting 1950-2025): up in all 19 midterm years, mean +14.8% against +4.3% for the same window in the other three cycle years (+10.5pp, Mann-Whitney p 0.0001; 68% of other years up). The edge holds across nearby start and end months (3 of 20 cells weak), from 1974 onward (+7.7pp, 13 of 13) and on the Nasdaq 100 (+14.7pp, 10 of 10). OUT OF SAMPLE (pre-registered, windows starting 1896-1949): not distinguishable from other years, which is inconclusive rather than a rejection, since twelve windows cannot rule out a smaller edge. The Dow was up in 7 of 12, +2.4pp on the mean with a negative median difference (p 0.32), and fell 17.5% in 1930-31 and 15.4% in 1938-39; the S&P 1928-1949 was up in 2 of 5. The 19 of 19 is therefore a post-1949 feature: either a post-war policy-cycle regime or a start year chosen where the record looks perfect, and the data cannot separate the two. These are also the same 19 years the July card and the September entry test used; October is the third entry tried on them. Even in sample, the daily drawdown inside the window reached 16.4% (2018-19) and 14.7% (2002-03). Capped at MONITOR: the 2026-27 window is watched as a post-1949 seasonal, not acted on as a tested edge. The card's base rate is every month-end start, not the same window in other years. At 6M, the only horizon tested, the two give similar edges (+10.2pp on the card's base, +10.8pp like-for-like). At 1M and 3M the card's base flatters the window, because November to January is seasonally strong in every cycle year: like-for-like the edges are +0.5pp and +4.0pp. The 1M, 3M and 12M cells were not tested.",
+      "definition": "At each end-of-October month-end in a year where year mod 4 = 2 (a US midterm election year: ..., 2018, 2022, 2026), measure forward S&P 500 price-index returns over 1/3/6/12 months. The 6-month window (end-October to end-April of the pre-election year) is the headline. Forward returns on the Norgate $SPX monthly series from the October close (event-study convention).",
+      "gateOverride": "monitor",
+      "gateOverrideNote": "Capped to MONITOR: the edge is in-sample only. Out of sample (Dow 1898-1946, pre-registered) the window was up in 7 of 12, +2.4pp over other years with a negative median difference, p 0.32. The p-values on this card are in sample, against an every-month base; only the 6M cell was tested. Post-1949 seasonal context on the same 19 years as the July card, not a tested edge."
+    },
+    {
       "id": "vol-thrust-btc",
       "name": "Bitcoin — 1-week volatility thrust (+2σ)",
       "summary": "A ~1-week move measured in units of Bitcoin's own prior volatility, triggered at +2 sigma, causal by construction. The one signal here with a real short-horizon edge: 51 episodes, +6.4pp over its own base rate at 1 month (p=0.01). But a cross-asset test showed it is CRYPTO-ONLY — it vanishes in large-cap equities on the largest samples of the set. Read the Nasdaq-100 control card beside this one.",
