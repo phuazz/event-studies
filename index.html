@@ -670,7 +670,7 @@ function livePanel(ev){
   const mo=s.k/21, inLbl=mo<1?s.k+'d':mo.toFixed(1)+'mo';
   const rel=s.expMed==null?'':(s.mtm-s.expMed>0.005?'ahead of':(s.mtm-s.expMed<-0.005?'behind':'in line with'));
   return `<div class="live"><b>● Live instance</b> — triggered <b>${s.date}</b> (${s.k}d ago, ~${inLbl} into the window).
-    Marked-to-market <b>${P(s.mtm)}</b> vs expected median <b>${P(s.expMed)}</b> at this point${rel?` — <b>${rel}</b> expectation`:''}.
+    Marked-to-market <b>${P(s.mtm)}</b> vs the prior-episode median <b>${P(s.expMed)}</b> at this point${rel?` — <b>${rel}</b> that median`:''}. The gap describes the path so far, not what comes next: this book has not tested whether an instance that falls behind its median later catches up.
     This instance so far: peak <b>${P(s.instMFE)}</b>, trough <span style="color:var(--rd)"><b>${P(s.instMAE)}</b></span>.</div>`;
 }
 
@@ -878,7 +878,7 @@ function statusTable(data){
     let state='—', stateCls='';
     if(r.s&&r.s.live){
       const ahead=withDir(r);
-      state=`<span class="ln"><b>live</b> · ${r.s.k}d in</span><span class="ln"><span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% expected</span>`;
+      state=`<span class="ln"><b>live</b> · ${r.s.k}d in</span><span class="ln"><span class="${ahead?'pos':'neg'}">${(r.s.mtm*100>=0?'+':'')}${(r.s.mtm*100).toFixed(1)}%</span> vs ${(r.s.expMed*100>=0?'+':'')}${(r.s.expMed*100).toFixed(1)}% median</span>`;
       stateCls='is-live';
     } else if(r.d!=null){
       // A card that triggers on the LAST bar has no forward window yet, so liveStatus
@@ -898,7 +898,7 @@ function statusTable(data){
       <td class="st">${state}</td></tr>`;
   }).join('');
   return `<div class="plabel">All studies at a glance</div>
-    <div class="ov-meta" style="margin:0 0 8px"><b>${nLive} of ${data.events.length}</b> inside a forward window, <b>${nAhead}</b> of those tracking ahead of ${nAhead===1?'its':'their'} own expected path · ${nAct} act-gated. The gate is a mechanical score, not a recommendation — several studies here are published as context or as an explicit control, so open a study for its verdict before reading anything into the badge. Click any row.</div>
+    <div class="ov-meta" style="margin:0 0 8px"><b>${nLive} of ${data.events.length}</b> inside a forward window, <b>${nAhead}</b> of those tracking ahead of ${nAhead===1?'its':'their'} own median path · ${nAct} act-gated. Ahead or behind describes the path so far and is not a forecast: whether an instance behind its median later catches up is untested here, and a power check on 18 Nov 2026 found too few independent episodes to test it. The gate is a mechanical score, not a recommendation — several studies here are published as context or as an explicit control, so open a study for its verdict before reading anything into the badge. Click any row.</div>
     <div class="tscroll stbl"><table>
       <thead><tr><th>Study</th><th>Gate</th><th class="num">Eps</th><th class="num">Strongest cell</th><th class="num dt">Last trigger</th><th>State</th></tr></thead>
       <tbody>${body}</tbody></table></div>`;
