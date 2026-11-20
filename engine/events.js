@@ -747,6 +747,44 @@ function detectMomentumThrustFrom252dLow(target, ev) {
   return { dates, ac, triggers, indicator: roc.map(r => r == null ? null : +(r * 100).toFixed(1)), indicatorName: `${rocWin}d RoC %` };
 }
 
+// First close below the `smaPeriod`-day SMA after a long run of consecutive closes
+// above it. Mechanism under test: a long unbroken run above the 200-day marks a
+// persistent uptrend, and the first break of it is more often a pause inside that
+// trend than the end of it, so forward returns should lean positive.
+//
+// THE FAIR COMPARISON IS NOT "ALL DAYS". The rule can only fire inside a long
+// uptrend, and uptrend days carry their own drift. Comparing against every day since
+// 1950 (bear markets included) credits the signal with the drift of the regime it
+// was selected from. So this detector also returns `matchedBaselineIdx`: every day
+// that itself sits at the end of a run of >= minRunDays closes above the SMA, i.e.
+// a random day in an equally mature uptrend. analyseEvent runs a second Monte Carlo
+// against that set. Both are causal: the run count at day i uses closes through i.
+//
+// A close exactly ON the SMA ends the run (it is not above), and counts as the break.
+function detectFirstCloseBelowSmaAfterRun(target, ev) {
+  const ac = target.daily.map(b => b.ac);
+  const dates = target.daily.map(b => b.d);
+  const p = ev.smaPeriod || 200;
+  const minRun = ev.minRunDays != null ? ev.minRunDays : 150;
+  const s = sma(ac, p);
+  const n = ac.length;
+  const run = new Array(n).fill(null);
+  let r = 0;
+  for (let i = 0; i < n; i++) {
+    if (s[i] == null) { r = 0; continue; }
+    r = ac[i] > s[i] ? r + 1 : 0;
+    run[i] = r;
+  }
+  const triggers = [], matchedBaselineIdx = [];
+  for (let i = 1; i < n; i++) {
+    if (run[i] == null) continue;
+    if (run[i] >= minRun) matchedBaselineIdx.push(i);
+    if (run[i] === 0 && run[i - 1] != null && run[i - 1] >= minRun) triggers.push(i);
+  }
+  return { dates, ac, triggers, matchedBaselineIdx, runLength: run, indicator: run,
+           indicatorName: `Consecutive closes above ${p}d SMA` };
+}
+
 // ---------- compact price series for daily cards ----------
 //
 // WHY. Every daily card used to serialise its whole target history as `priceSeries`,
@@ -917,7 +955,34 @@ function analyseEvent(series, ev, regimeMap) {
       ciLo = quantile(meds, 0.05); ciHi = quantile(meds, 0.95);
     }
 
+    // Optional second null: random days drawn from a detector-supplied set (see
+    // detectFirstCloseBelowSmaAfterRun). Absent for every other card, whose output is
+    // unchanged.
+    let matched = {};
+    if (series.matchedBaselineIdx && n > 0) {
+      const mb = [];
+      for (const j of series.matchedBaselineIdx) if (j + h < ac.length) mb.push(ac[j + h] / ac[j] - 1);
+      if (mb.length) {
+        let geM = 0, geMH = 0;
+        for (let b = 0; b < BOOT_ITERS; b++) {
+          const draws = [];
+          for (let j = 0; j < n; j++) draws.push(mb[randInt(mb.length)]);
+          if (median(draws) >= condMedian) geM++;
+          let pos = 0;
+          for (const d of draws) if (d > 0) pos++;
+          if (pos / n >= condHit) geMH++;
+        }
+        matched = {
+          matchedN: mb.length, matchedBaseMedian: median(mb), matchedBaseHit: hitRate(mb),
+          matchedEdgeMedian: condMedian - median(mb), matchedEdgeHit: condHit - hitRate(mb),
+          matchedPValue: 2 * Math.min(geM, BOOT_ITERS - geM) / BOOT_ITERS,
+          matchedPValueHit: 2 * Math.min(geMH, BOOT_ITERS - geMH) / BOOT_ITERS
+        };
+      }
+    }
+
     return {
+      ...matched,
       h, label: HORIZON_LABELS[hi], n,
       mean: mean(fwd), median: condMedian, hit: hitRate(fwd),
       mfeMedian: median(mfe), maeMedian: median(mae),
@@ -1620,6 +1685,8 @@ function main() {
       series = detectOversoldReversionInDowntrend(loadTicker(ev.target), ev);
     } else if (ev.kind === 'momentum_thrust_from_252d_low') {
       series = detectMomentumThrustFrom252dLow(loadTicker(ev.target), ev);
+    } else if (ev.kind === 'first_close_below_sma_after_run') {
+      series = detectFirstCloseBelowSmaAfterRun(loadTicker(ev.target), ev);
     } else {
       console.warn(`SKIP ${ev.id}: unknown kind ${ev.kind}`); continue;
     }
@@ -1686,6 +1753,6 @@ if (require.main === module) {
   try { main(); } catch (e) { console.error('Fatal:', e.message); process.exit(1); }
 }
 
-module.exports = { rsiWilder, sma, clusterEpisodes, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, analyseSeasonalElectionCycle, loadTicker,
+module.exports = { rsiWilder, sma, clusterEpisodes, detectFirstCloseBelowSmaAfterRun, analyseEvent, HORIZONS, HORIZON_LABELS, analyseRatioExtreme, analyseSeasonalElectionCycle, loadTicker,
                    sparsifyPriceSeries, expandPriceSeries, compactCarriedCard, FAN_DAYS, CHG_BARS,
                    LOCAL_ONLY_TICKERS, requiredTickers };
