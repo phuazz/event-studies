@@ -125,7 +125,10 @@ for (const ev of hitCards) {
   const undeclared = { ...ev };
   delete undeclared.scoreOn;
   const asMedian = credibility(undeclared);
-  const bestNegHit = (ev.byHorizon || []).filter(r => r.edgeHit < 0 && r.pValueHit != null)
+  // In the card's DECLARED direction. This read `edgeHit < 0` while every hit-rate card
+  // predicted a fall; spx-sma200-run-break (2026-11-20) is the first 'up' one.
+  const sgn = ev.direction === 'down' ? -1 : 1;
+  const bestNegHit = (ev.byHorizon || []).filter(r => r.edgeHit * sgn > 0 && r.pValueHit != null)
     .reduce((m, r) => (!m || r.pValueHit < m.pValueHit ? r : m), null);
   console.log(`  ${ev.id}: scoreOn=hitrate -> ${declared.action} ${declared.total}/10 ` +
               `(bestP ${declared.bestP}); same card scored on the median -> ` +
